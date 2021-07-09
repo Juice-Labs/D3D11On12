@@ -9,7 +9,7 @@ file(GLOB INL ../include/*.inl *.inl)
 
 file(GLOB_RECURSE EXTERNAL_INC ../external/*.h ../external/*.hpp)
 
-add_library(d3d11on12 SHARED ${SRC} ${INC} ${INL} ${EXTERNAL_INC} d3d11on12.rc d3d11on12.def)
+add_library(juiceumd SHARED ${SRC} ${INC} ${INL} ${EXTERNAL_INC} d3d11on12.rc d3d11on12.def)
 
 FetchContent_Declare(
     d3d12translationlayer
@@ -18,8 +18,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(d3d12translationlayer)
 
-target_link_libraries(d3d11on12 d3d12translationlayer_wdk)
-target_include_directories(d3d11on12
+target_link_libraries(juiceumd d3d12translationlayer_wdk)
+target_include_directories(juiceumd
     PRIVATE ../include
     PRIVATE ../external
     PUBLIC ../interface

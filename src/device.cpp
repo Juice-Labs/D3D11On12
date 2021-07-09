@@ -595,12 +595,22 @@ namespace D3D11On12
         m_pDDITable->pfnQueryScanoutCaps = QueryScanoutCaps;
         m_pDDITable->pfnPrepareScanoutTransformation = PrepareScanoutTransformation;
 
-        PopulateDeferredShaderInit(m_pDDITable->pfnCreateComputeShader);
-        PopulateDeferredShaderInit(m_pDDITable->pfnCreateVertexShader);
-        PopulateDeferredShaderInit(m_pDDITable->pfnCreatePixelShader);
-        PopulateDeferredShaderInit(m_pDDITable->pfnCreateGeometryShader);
-        PopulateDeferredShaderInit(m_pDDITable->pfnCreateDomainShader);
-        PopulateDeferredShaderInit(m_pDDITable->pfnCreateHullShader);
+#if 0
+        m_pDDITable->pfnCreateVertexShader = [](D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*)
+        {
+            D3D11on12_DDI_ENTRYPOINT_START();
+            auto pDevice = CastFrom(hDevice);
+
+            SHADER_DESC sd{};
+            sd.pFunction = (const BYTE*)pShaderCode;
+        };
+            
+        m_pDDITable->pfnCreateComputeShader = CreateComputeShader;
+        m_pDDITable->pfnCreatePixelShader = CreatePixelShader;
+        m_pDDITable->pfnCreateGeometryShader = CreateGeometryShader;
+        m_pDDITable->pfnCreateDomainShader = CreateDomainShader;
+        m_pDDITable->pfnCreateHullShader = CreateHullShader;
+#endif
 
         assert(pArgs->Interface == D3DWDDM2_7_DDI_INTERFACE_VERSION || pArgs->Interface == D3DWDDM2_6_DDI_INTERFACE_VERSION);
 

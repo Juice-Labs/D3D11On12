@@ -43,19 +43,30 @@ static D3D11_RESOURCE_FLAGS GetResourceFlagsForD3D12(_In_ D3D10DDI_HRESOURCE hRe
 
     D3D11_RESOURCE_FLAGS flags{};
     *pbAcquireableOnWrite = true;
-    if ((createArgs->MapFlags & D3D10_DDI_MAP_READWRITE) != 0)
+
+    if (createArgs->Usage == D3D10_DDI_USAGE_DEFAULT)
     {
-        flags.CPUAccessFlags |= (D3D11_CPU_ACCESS_WRITE | D3D11_CPU_ACCESS_READ);
+        // Will have no CPU access
     }
-    
-    if ((createArgs->MapFlags & (D3D10_DDI_MAP_WRITE | D3D10_DDI_MAP_WRITE_DISCARD | D3D10_DDI_MAP_WRITE_NOOVERWRITE)) != 0)
+    else if (createArgs->Usage == D3D10_DDI_USAGE_IMMUTABLE)
+    {
+        // Will have no CPU access
+    }
+    else if (createArgs->Usage == D3D10_DDI_USAGE_DYNAMIC)
     {
         flags.CPUAccessFlags |= D3D11_CPU_ACCESS_WRITE;
     }
-    
-    if ((createArgs->MapFlags & D3D10_DDI_MAP_READ) != 0)
+    else if (createArgs->Usage == D3D10_DDI_USAGE_STAGING)
     {
-        flags.CPUAccessFlags |= D3D11_CPU_ACCESS_READ;
+        if ((createArgs->MapFlags & (D3D10_DDI_MAP_WRITE | D3D10_DDI_MAP_WRITE_DISCARD | D3D10_DDI_MAP_WRITE_NOOVERWRITE)) != 0)
+        {
+            flags.CPUAccessFlags |= D3D11_CPU_ACCESS_WRITE;
+        }
+
+        if ((createArgs->MapFlags & D3D10_DDI_MAP_READ) != 0)
+        {
+            flags.CPUAccessFlags |= D3D11_CPU_ACCESS_READ;
+        }
     }
 
     if ((createArgs->MiscFlags & D3D10_DDI_RESOURCE_MISC_SHARED) != 0)
