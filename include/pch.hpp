@@ -26,6 +26,8 @@
 
 #include "D3D11On12DDI.h"
 
+#include "detours.h"
+
 _At_(return, _When_(FAILED(hr), __analysis_noreturn))
 inline void ThrowFailure(HRESULT hr)
 {

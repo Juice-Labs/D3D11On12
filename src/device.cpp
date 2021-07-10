@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 #include "pch.hpp"
 
+extern std::mutex s_threadShaderDataMutex;
+extern std::unordered_map<DWORD, D3D11On12::SHADER_DESC> s_threadShaderData;
+
 namespace D3D11On12
 {
     void APIENTRY Device::CheckFormatSupport(D3D10DDI_HDEVICE hDevice, DXGI_FORMAT format, _Out_ UINT* pData)
@@ -595,22 +598,12 @@ namespace D3D11On12
         m_pDDITable->pfnQueryScanoutCaps = QueryScanoutCaps;
         m_pDDITable->pfnPrepareScanoutTransformation = PrepareScanoutTransformation;
 
-#if 0
-        m_pDDITable->pfnCreateVertexShader = [](D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*)
-        {
-            D3D11on12_DDI_ENTRYPOINT_START();
-            auto pDevice = CastFrom(hDevice);
-
-            SHADER_DESC sd{};
-            sd.pFunction = (const BYTE*)pShaderCode;
-        };
-            
-        m_pDDITable->pfnCreateComputeShader = CreateComputeShader;
-        m_pDDITable->pfnCreatePixelShader = CreatePixelShader;
-        m_pDDITable->pfnCreateGeometryShader = CreateGeometryShader;
-        m_pDDITable->pfnCreateDomainShader = CreateDomainShader;
-        m_pDDITable->pfnCreateHullShader = CreateHullShader;
-#endif
+        m_pDDITable->pfnCreateVertexShader = CreateVertexShaderDDI;
+        m_pDDITable->pfnCreateComputeShader = CreateComputeShaderDDI;
+        m_pDDITable->pfnCreatePixelShader = CreatePixelShaderDDI;
+        m_pDDITable->pfnCreateGeometryShader = CreateGeometryShaderDDI;
+        m_pDDITable->pfnCreateDomainShader = CreateDomainShaderDDI;
+        m_pDDITable->pfnCreateHullShader = CreateHullShaderDDI;
 
         assert(pArgs->Interface == D3DWDDM2_7_DDI_INTERFACE_VERSION || pArgs->Interface == D3DWDDM2_6_DDI_INTERFACE_VERSION);
 
@@ -975,6 +968,64 @@ namespace D3D11On12
         pDeferredDevice->ClearTrackedState();
 
         D3D11on12_DDI_ENTRYPOINT_END_AND_REPORT_HR(hDevice, S_OK);
+    }
+
+    void APIENTRY Device::CreateVertexShaderDDI(D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept
+    {
+        auto pDevice = CastFrom(hDevice);
+
+        //reinterpret_cast<DeviceChildDeferred<D3D10DDI_HSHADER>*>(hShader.pDrvPrivate)->m_ImmediateHandle = D3D10DDI_HSHADER{ hRtShader.handle };
+        
+        const SHADER_DESC* sd = nullptr;
+        {
+            std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+            auto it = s_threadShaderData.find(GetCurrentThreadId());
+
+            // The DX CreateShader call should have left shader data for us to use
+            // here, much further down the stack
+            assert(it != s_threadShaderData.end());
+            sd = &it->second;
+        }
+
+        pDevice->CreateVertexShader(hShader, sd);
+    }
+
+    void APIENTRY Device::CreatePixelShaderDDI(D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept
+    {
+        auto pDevice = CastFrom(hDevice);
+
+        const SHADER_DESC* sd = nullptr;
+        {
+            std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+            auto it = s_threadShaderData.find(GetCurrentThreadId());
+
+            // The DX CreateShader call should have left shader data for us to use
+            // here, much further down the stack
+            assert(it != s_threadShaderData.end());
+            sd = &it->second;
+        }
+
+        pDevice->CreatePixelShader(hShader, sd);
+    }
+
+    void APIENTRY Device::CreateGeometryShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept
+    {
+
+    }
+
+    void APIENTRY Device::CreateHullShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER, _In_ CONST D3D11_1DDIARG_TESSELLATION_IO_SIGNATURES*) noexcept
+    {
+
+    }
+
+    void APIENTRY Device::CreateDomainShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER, _In_ CONST D3D11_1DDIARG_TESSELLATION_IO_SIGNATURES*) noexcept
+    {
+
+    }
+
+    void APIENTRY Device::CreateComputeShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER) noexcept
+    {
+
     }
 
     //----------------------------------------------------------------------------------------------------------------------------------
