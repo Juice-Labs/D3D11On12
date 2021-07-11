@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 #include "pch.hpp"
 
+#pragma comment( lib, "d3d11" )
+
 typedef struct ID3D11DeviceVtbl
 {
     BEGIN_INTERFACE
@@ -384,7 +386,7 @@ HRESULT  CreateVertexShaderPushData(
     D3D11On12::SHADER_DESC sd;
     sd.pFunction = (const BYTE*)pShaderBytecode;
     sd.pLinkage = pClassLinkage;
-    sd.SizeInBytes = BytecodeLength;
+    sd.SizeInBytes = (UINT)BytecodeLength;
 
     {
         std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
@@ -412,7 +414,7 @@ HRESULT  CreatePixelShaderPushData(
     D3D11On12::SHADER_DESC sd;
     sd.pFunction = (const BYTE*)pShaderBytecode;
     sd.pLinkage = pClassLinkage;
-    sd.SizeInBytes = BytecodeLength;
+    sd.SizeInBytes = (UINT)BytecodeLength;
 
     {
         std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
@@ -598,7 +600,7 @@ HRESULT fixupDXDevice(const CComPtr<IDXGIAdapter>& adapter)
     ID3D11Device* device;
     ID3D11DeviceContext* immediateContext;
 
-    ThrowFailure(D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, levels.data(), levels.size(), D3D11_SDK_VERSION, &device, &outLevel, &immediateContext));
+    ThrowFailure(D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, levels.data(), (UINT)levels.size(), D3D11_SDK_VERSION, &device, &outLevel, &immediateContext));
 
     ID3D11DeviceVtbl* deviceTbl = (ID3D11DeviceVtbl*)*((intptr_t*)device);
 

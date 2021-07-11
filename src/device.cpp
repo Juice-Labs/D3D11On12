@@ -970,8 +970,10 @@ namespace D3D11On12
         D3D11on12_DDI_ENTRYPOINT_END_AND_REPORT_HR(hDevice, S_OK);
     }
 
-    void APIENTRY Device::CreateVertexShaderDDI(D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept
+    void APIENTRY Device::CreateVertexShaderDDI(D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept
     {
+        hRtShader;
+
         auto pDevice = CastFrom(hDevice);
 
         //reinterpret_cast<DeviceChildDeferred<D3D10DDI_HSHADER>*>(hShader.pDrvPrivate)->m_ImmediateHandle = D3D10DDI_HSHADER{ hRtShader.handle };
@@ -990,8 +992,10 @@ namespace D3D11On12
         pDevice->CreateVertexShader(hShader, sd);
     }
 
-    void APIENTRY Device::CreatePixelShaderDDI(D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept
+    void APIENTRY Device::CreatePixelShaderDDI(D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept
     {
+        hRtShader;
+
         auto pDevice = CastFrom(hDevice);
 
         const SHADER_DESC* sd = nullptr;
