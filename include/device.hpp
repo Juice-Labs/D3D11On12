@@ -436,6 +436,10 @@ namespace D3D11On12
             return m_SharedResourceHelpers;
         }
 
+        HANDLE m_hContext;
+        const D3DDDI_DEVICECALLBACKS* const m_pKTCallbacks;
+        const D3D10DDI_HRTDEVICE m_hRTDevice;
+
     protected:
         void PostSubmit();
 
@@ -452,8 +456,6 @@ namespace D3D11On12
 
         DXGITableLatest *const m_pDXGITable;
         const DXGI_DDI_BASE_CALLBACKS *const m_pDXGICallbacks;
-        const D3DDDI_DEVICECALLBACKS *const m_pKTCallbacks;
-        const D3D10DDI_HRTDEVICE m_hRTDevice;
 
         const D3D12TranslationLayer::TranslationLayerCallbacks m_translationCallbacks;
         D3D12TranslationLayer::ImmediateContext m_ImmediateContext;

@@ -33,7 +33,7 @@ namespace D3D11On12
         auto pDevice = CastFrom(hDevice);
 
         if (!pDevice->m_PSODesc.pVertexShader) return;
-
+         
         pDevice->PreDraw();
         pDevice->GetBatchedContext().DrawIndexedInstanced(countPerInstance, instanceCount, indexStart, vertexStart, instanceStart);
 

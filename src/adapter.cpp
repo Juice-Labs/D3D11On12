@@ -359,6 +359,169 @@ typedef struct ID3D11DeviceVtbl
     END_INTERFACE
 } ID3D11DeviceVtbl;
 
+typedef struct IDXGIFactoryVtbl
+{
+    BEGIN_INTERFACE
+
+        HRESULT(STDMETHODCALLTYPE* QueryInterface)(
+            IDXGIFactory* This,
+            /* [in] */ REFIID riid,
+            /* [annotation][iid_is][out] */
+            _COM_Outptr_  void** ppvObject);
+
+    ULONG(STDMETHODCALLTYPE* AddRef)(
+        IDXGIFactory* This);
+
+    ULONG(STDMETHODCALLTYPE* Release)(
+        IDXGIFactory* This);
+
+    HRESULT(STDMETHODCALLTYPE* SetPrivateData)(
+        IDXGIFactory* This,
+        /* [annotation][in] */
+        _In_  REFGUID Name,
+        /* [in] */ UINT DataSize,
+        /* [annotation][in] */
+        _In_reads_bytes_(DataSize)  const void* pData);
+
+    HRESULT(STDMETHODCALLTYPE* SetPrivateDataInterface)(
+        IDXGIFactory* This,
+        /* [annotation][in] */
+        _In_  REFGUID Name,
+        /* [annotation][in] */
+        _In_opt_  const IUnknown* pUnknown);
+
+    HRESULT(STDMETHODCALLTYPE* GetPrivateData)(
+        IDXGIFactory* This,
+        /* [annotation][in] */
+        _In_  REFGUID Name,
+        /* [annotation][out][in] */
+        _Inout_  UINT* pDataSize,
+        /* [annotation][out] */
+        _Out_writes_bytes_(*pDataSize)  void* pData);
+
+    HRESULT(STDMETHODCALLTYPE* GetParent)(
+        IDXGIFactory* This,
+        /* [annotation][in] */
+        _In_  REFIID riid,
+        /* [annotation][retval][out] */
+        _COM_Outptr_  void** ppParent);
+
+    HRESULT(STDMETHODCALLTYPE* EnumAdapters)(
+        IDXGIFactory* This,
+        /* [in] */ UINT Adapter,
+        /* [annotation][out] */
+        _COM_Outptr_  IDXGIAdapter** ppAdapter);
+
+    HRESULT(STDMETHODCALLTYPE* MakeWindowAssociation)(
+        IDXGIFactory* This,
+        HWND WindowHandle,
+        UINT Flags);
+
+    HRESULT(STDMETHODCALLTYPE* GetWindowAssociation)(
+        IDXGIFactory* This,
+        /* [annotation][out] */
+        _Out_  HWND* pWindowHandle);
+
+    HRESULT(STDMETHODCALLTYPE* CreateSwapChain)(
+        IDXGIFactory* This,
+        /* [annotation][in] */
+        _In_  IUnknown* pDevice,
+        /* [annotation][in] */
+        _In_  DXGI_SWAP_CHAIN_DESC* pDesc,
+        /* [annotation][out] */
+        _COM_Outptr_  IDXGISwapChain** ppSwapChain);
+
+    HRESULT(STDMETHODCALLTYPE* CreateSoftwareAdapter)(
+        IDXGIFactory* This,
+        /* [in] */ HMODULE Module,
+        /* [annotation][out] */
+        _COM_Outptr_  IDXGIAdapter** ppAdapter);
+
+    END_INTERFACE
+} IDXGIFactoryVtbl;
+
+CreateSwapChainFunction OrigCreateSwapChain;
+
+std::mutex s_threadShaderDataMutex;
+std::unordered_map<DWORD, D3D11On12::SHADER_DESC> s_threadShaderData;
+std::unordered_map<DWORD, SwapchainMetaData> s_threadSwapchainData;
+static D3D11On12::SOpenAdapterArgs testArgs;
+
+HRESULT STDMETHODCALLTYPE JuiceCreateSwapChain(
+    IDXGIFactory* This,
+    /* [annotation][in] */
+    _In_  IUnknown* pDevice,
+    /* [annotation][in] */
+    _In_  DXGI_SWAP_CHAIN_DESC* pDesc,
+    /* [annotation][out] */
+    _COM_Outptr_  IDXGISwapChain** ppSwapChain)
+{
+    DXGI_SWAP_CHAIN_DESC dx11desc = *pDesc;
+    DXGI_SWAP_CHAIN_DESC dx12desc = *pDesc;
+
+    dx12desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+
+    switch (dx12desc.SwapEffect)
+    {
+        case DXGI_SWAP_EFFECT_DISCARD:
+            dx12desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+            if (dx12desc.BufferCount < 2)
+            {
+                dx12desc.BufferCount = 2;
+            }
+            break;
+        case DXGI_SWAP_EFFECT_SEQUENTIAL:
+            dx12desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+            break;
+        default:
+            // Others are fine.
+            break;
+    }
+
+    CComPtr<IDXGISwapChain> tmpSwapchain;
+    HRESULT res = OrigCreateSwapChain(This, testArgs.p3DCommandQueue, &dx12desc, &tmpSwapchain);
+    assert(SUCCEEDED(res));
+
+    {
+        std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+        auto it = s_threadSwapchainData.find(GetCurrentThreadId());
+        if (it == s_threadSwapchainData.end())
+        {
+            SwapchainMetaData sd;
+            sd.currentDesc = pDesc;
+            sd.origCreateSwapchain = OrigCreateSwapChain;
+            sd.swapchain = tmpSwapchain;
+            s_threadSwapchainData.emplace(GetCurrentThreadId(), sd);
+        }
+    }
+
+    wchar_t winName[MAX_PATH];
+    RealGetWindowClassW(pDesc->OutputWindow, winName, MAX_PATH);
+    const wchar_t* szTitle = L"Hidden Window";
+
+    dx11desc.OutputWindow = CreateWindowW(
+        winName,
+        szTitle,
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        100, 100,
+        NULL,
+        NULL,
+        GetModuleHandle(NULL),
+        NULL
+    );
+
+    res = OrigCreateSwapChain(This, pDevice, &dx11desc, ppSwapChain);
+
+    {
+        std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+        auto it = s_threadSwapchainData.find(GetCurrentThreadId());
+        s_threadSwapchainData.erase(it);
+    }
+
+    return res;
+}
+
 typedef HRESULT(STDMETHODCALLTYPE* ShaderCreateFn)(
     ID3D11Device* This,
     /* [annotation] */
@@ -372,9 +535,6 @@ typedef HRESULT(STDMETHODCALLTYPE* ShaderCreateFn)(
 
 ShaderCreateFn OrigCreateVertexShader;
 ShaderCreateFn OrigCreatePixelShader;
-
-std::mutex s_threadShaderDataMutex;
-std::unordered_map<DWORD, D3D11On12::SHADER_DESC> s_threadShaderData;
 
 HRESULT  CreateVertexShaderPushData(
     ID3D11Device* This,
@@ -435,6 +595,7 @@ HRESULT  CreatePixelShaderPushData(
 
 HRESULT WINAPI OpenAdapter_D3D11On12(_Inout_ D3D10DDIARG_OPENADAPTER* pArgs, _Inout_ D3D11On12::SOpenAdapterArgs* pArgs2)
 {
+    testArgs = *pArgs2;
     try
     {
         pArgs->hAdapter.pDrvPrivate = new D3D11On12::Adapter(pArgs, *pArgs2); // throw( _com_error, bad_alloc )
@@ -587,6 +748,27 @@ static BOOL IsProcessDWM()
     return result;
 }
 
+HRESULT fixupSwapchainCreation(const CComPtr<IDXGIFactory4>& factory)
+{
+    static bool patched = false;
+
+    if (patched)
+        return S_OK;
+
+    IDXGIFactoryVtbl* factoryTbl = (IDXGIFactoryVtbl*)*((intptr_t*)factory.p);
+
+    OrigCreateSwapChain = factoryTbl->CreateSwapChain;
+
+    DetourTransactionBegin();
+    DetourUpdateThread(GetCurrentThread());
+    DetourAttach((PVOID*)&OrigCreateSwapChain, (PVOID)JuiceCreateSwapChain);
+    DetourTransactionCommit();
+
+    patched = true;
+
+    return S_OK;
+}
+
 HRESULT fixupDXDevice(const CComPtr<IDXGIAdapter>& adapter)
 {
     static bool patched = false;
@@ -629,11 +811,13 @@ HRESULT WINAPI OpenAdapter10_2(_Inout_ D3D10DDIARG_OPENADAPTER* pArgs)
     CComPtr<IDXGIAdapter> warpAdapter;
     ThrowFailure(factory->EnumWarpAdapter(IID_PPV_ARGS(&warpAdapter)));
 
+#if 0
     CComPtr<ID3D12Debug> debugController;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
     {
         debugController->EnableDebugLayer();
     }
+#endif
 
     ThrowFailure(D3D12CreateDevice(
         warpAdapter,
@@ -654,6 +838,8 @@ HRESULT WINAPI OpenAdapter10_2(_Inout_ D3D10DDIARG_OPENADAPTER* pArgs)
     args.Callbacks.NotifySharedResourceCreation = NotifySharedResourceCreationForD3D12;
 
     fixupDXDevice(warpAdapter);
+
+    fixupSwapchainCreation(factory);
 
     return OpenAdapter_D3D11On12(pArgs, &args);
 }
@@ -732,6 +918,23 @@ namespace D3D11On12
 
         auto pAdapter = CastFrom(hAdapter);
         new (pArgs->hDrvDevice.pDrvPrivate) Device(pAdapter, pArgs); // throw( _com_error, bad_alloc )
+
+        uint64_t dummyValue = 0;
+
+        D3DDDICB_CREATECONTEXT createContext;
+        ZeroMemory(&createContext, sizeof(createContext));
+
+        createContext.NodeOrdinal = 0;
+        createContext.EngineAffinity = 0;
+        createContext.Flags.Value = 0;
+        createContext.pPrivateDriverData = &dummyValue;
+        createContext.PrivateDriverDataSize = sizeof(dummyValue);
+
+        HRESULT otherHr = pArgs->pKTCallbacks->pfnCreateContextCb(pArgs->hRTDevice.handle, &createContext);
+        printf("%d\n", otherHr);
+
+        auto pDevice = Device::CastFrom(pArgs->hDrvDevice);
+        pDevice->m_hContext = createContext.hContext;
 
         ThrowFailure(pAdapter->m_pUnderlyingDevice->QueryInterface(&pAdapter->m_pCompatDevice));
 

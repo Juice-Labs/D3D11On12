@@ -3,8 +3,39 @@
 #include "pch.hpp"
 #include "SwapChainHelper.hpp"
 
+class Timer
+{
+public:
+    Timer()
+    {
+        LARGE_INTEGER	largeFreq;
+        QueryPerformanceFrequency(&largeFreq);
+        freq = largeFreq.QuadPart;
+    }
+
+    uint64_t GetCount()
+    {
+        LARGE_INTEGER	count;
+        QueryPerformanceCounter(&count);
+        return count.QuadPart;
+    }
+
+    // returns number of ms between 2 counts
+    double CalcTimeDelta(uint64_t count1, uint64_t count2)
+
+    {
+        return (((double)count2 / (double)freq - (double)count1 / (double)freq) * 1000.0);
+    }
+
+
+private:
+    //num. counts per second
+    uint64_t		freq;
+};
+
 namespace D3D11On12
 {
+#if 0
     HRESULT APIENTRY Device::Present1(DXGI1_6_1_DDI_ARG_PRESENT* pArgs)
     {
         D3D11on12_DDI_ENTRYPOINT_START();
@@ -17,17 +48,118 @@ namespace D3D11On12
             ExtensionData.pSrc = Resource::CastFrom(pArgs->phSurfacesToPresent[0].hSurface);
             ExtensionData.pDXGIContext = pArgs->pDXGIContext;
         }
+        
+#if 0
         pDevice->GetBatchedContext().BatchExtension(&pDevice->m_PresentExt, ExtensionData);
         pDevice->GetBatchedContext().SubmitBatch();
+#endif
+
+#if 0
+        pDevice->TransitionResourceForRelease(ExtensionData.pSrc, D3D12_RESOURCE_STATE_PRESENT);
+        pDevice->ApplyAllResourceTransitions();
+
+        ExtensionData.pSrc->m_associatedUnderlyingSwapchain->Present(0, 0);
+
+        pDevice->TransitionResourceForRelease(ExtensionData.pSrc, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        pDevice->ApplyAllResourceTransitions();
+#endif
+
+        pDevice->TransitionResourceForRelease(ExtensionData.pSrc, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        pDevice->ApplyAllResourceTransitions();
+
+        static UINT bufferNum = 0;
+
+        CComPtr<ID3D12Resource> backBuffer;
+        ExtensionData.pSrc->m_associatedUnderlyingSwapchain->GetBuffer(bufferNum, IID_PPV_ARGS(&backBuffer));
+
+        auto list = pDevice->FlushBatchAndGetImmediateContext().GetGraphicsCommandList();
+
+        list->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(backBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST));
+        list->CopyResource(backBuffer, ExtensionData.pSrc->GetUnderlyingResource());
+        list->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(backBuffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
+
+        ExtensionData.pSrc->m_associatedUnderlyingSwapchain->Present(0, 0);
+
+        pDevice->FlushBatchAndGetImmediateContext();
+
+        pDevice->TransitionResourceForRelease(ExtensionData.pSrc, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        pDevice->ApplyAllResourceTransitions();
+
+        DXGIDDICB_PRESENT CBArgs = {};
+        CBArgs.pDXGIContext = pArgs->pDXGIContext;
+        HRESULT res = pDevice->m_pDXGICallbacks->pfnPresentCb(pDevice->m_hRTDevice.handle, &CBArgs);
+        printf("%x\n", res);
+
+        D3D11on12_DDI_ENTRYPOINT_END_AND_RETURN_HR(S_OK);
+    }
+#endif
+
+    static bool callPresent = true;
+
+    HRESULT APIENTRY Device::Present1(DXGI1_6_1_DDI_ARG_PRESENT* pArgs)
+    {
+        D3D11on12_DDI_ENTRYPOINT_START();
+        Device* pDevice = Device::CastFrom(pArgs->hDevice);
+
+        static uint64_t framesRendered = 0;
+        static uint64_t startTime = 0;
+        static uint64_t endTime = 0;
+
+        auto t = Timer();
+        if (startTime == 0)
+        {
+            startTime = t.GetCount();
+        }
+
+        {
+            std::lock_guard lock(pDevice->m_SwapChainManagerMutex);
+            if (!pDevice->m_SwapChainManager)
+            {
+                pDevice->m_SwapChainManager = std::make_shared<D3D12TranslationLayer::SwapChainManager>(pDevice->GetImmediateContextNoFlush());
+            }
+        }
+
+        if (pArgs->SurfacesToPresent)
+        {
+            PresentExtensionData ExtensionData{ };
+            ExtensionData.pSrc = Resource::CastFrom(pArgs->phSurfacesToPresent[0].hSurface);
+            ExtensionData.pDXGIContext = pArgs->pDXGIContext;
+
+            DXGIDDICB_PRESENT CBArgs = {};
+            CBArgs.pDXGIContext = pArgs->pDXGIContext;
+            CBArgs.hContext = pDevice->m_hContext;
+            CBArgs.hSrcAllocation = ExtensionData.pSrc->m_hAllocation;
+            HRESULT hr = pDevice->m_pDXGICallbacks->pfnPresentCb(pDevice->m_hRTDevice.handle, &CBArgs);
+            assert(SUCCEEDED(hr));
+
+            pDevice->GetBatchedContext().BatchExtension(&pDevice->m_PresentExt, ExtensionData);
+            //pDevice->GetBatchedContext().SubmitBatch();
+        }
+
+        ++framesRendered;
+
+        endTime = t.GetCount();
+
+        double ticksPerFrame = (double)(endTime - startTime) / (double)framesRendered;
+        printf("%f\n", ticksPerFrame);
+
         D3D11on12_DDI_ENTRYPOINT_END_AND_RETURN_HR(S_OK);
     }
 
-    void Device::PresentExtension::Dispatch(D3D12TranslationLayer::ImmediateContext&, const void* pData, size_t)
+    void Device::PresentExtension::Dispatch(D3D12TranslationLayer::ImmediateContext& context, const void* pData, size_t)
     {
-        m_Device->m_pPresentArgs = reinterpret_cast<PresentExtensionData const*>(pData);
-        DXGIDDICB_PRESENT CBArgs = {};
-        CBArgs.pDXGIContext = m_Device->m_pPresentArgs->pDXGIContext;
-        ThrowFailure(m_Device->m_pDXGICallbacks->pfnPresentCb(m_Device->m_hRTDevice.handle, &CBArgs));
+        if (callPresent)
+        {
+            auto pArgs = reinterpret_cast<PresentExtensionData const*>(pData);
+
+            auto pSwapChain = pArgs->pSrc->m_associatedUnderlyingSwapchain;
+            CComPtr<IDXGISwapChain3> pSwapChain3;
+            pSwapChain->QueryInterface(IID_PPV_ARGS(&pSwapChain3));
+            auto swapChainHelper = D3D12TranslationLayer::SwapChainHelper(pSwapChain3);
+            m_Device->m_SwapChainManager->WaitForMaximumFrameLatency();
+
+            swapChainHelper.StandardPresent(context, D3DDDI_FLIPINTERVAL_IMMEDIATE, *pArgs->pSrc->ImmediateResource());
+        }
     }
 
     HRESULT APIENTRY Device::Blt(DXGI_DDI_ARG_BLT* pArgs)
@@ -193,7 +325,7 @@ namespace D3D11On12
         auto swapChainHelper = D3D12TranslationLayer::SwapChainHelper( pSwapChain );
         m_SwapChainManager->WaitForMaximumFrameLatency();
 
-        HRESULT hr = swapChainHelper.StandardPresent( GetImmediateContextNoFlush(), pKMTPresent, *pArgs->pSrc->ImmediateResource() );
+        HRESULT hr = swapChainHelper.StandardPresent(GetImmediateContextNoFlush(), pKMTPresent->FlipInterval, *pArgs->pSrc->ImmediateResource());
         D3D11on12_DDI_ENTRYPOINT_END_AND_RETURN_HR(hr);
     }
 

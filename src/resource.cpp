@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 #include "pch.hpp"
 
+extern std::mutex s_threadShaderDataMutex;
+extern std::unordered_map<DWORD, SwapchainMetaData> s_threadSwapchainData;
+
 namespace D3D11On12
 {
     SIZE_T APIENTRY Resource::CalcPrivateResourceSize(D3D10DDI_HDEVICE hDevice, _In_ CONST D3D11DDIARG_CREATERESOURCE* /*pCreateResource*/)
@@ -82,7 +85,7 @@ namespace D3D11On12
             Desc12.Dimension);
     }
 
-    VOID APIENTRY Resource::CreateResource(D3D10DDI_HDEVICE hDevice, _In_ CONST D3D11DDIARG_CREATERESOURCE* pCreateResource, D3D10DDI_HRESOURCE hResource, D3D10DDI_HRTRESOURCE /*hRTResource*/)
+    VOID APIENTRY Resource::CreateResource(D3D10DDI_HDEVICE hDevice, _In_ CONST D3D11DDIARG_CREATERESOURCE* pCreateResource, D3D10DDI_HRESOURCE hResource, D3D10DDI_HRTRESOURCE hRTResource)
     {
         D3D11on12_DDI_ENTRYPOINT_START();
         Device *pDevice = Device::CastFrom(hDevice);
@@ -210,6 +213,36 @@ namespace D3D11On12
         PropagateToAppResourceDesc(pCreateResource->Usage, createArgs);
         ConvertUnderlyingTextureCreationDesc(createArgs, *pDevice, *pCreateResource);
 
+        SwapchainMetaData* smd = nullptr;
+        {
+            std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+            auto it = s_threadSwapchainData.find(GetCurrentThreadId());
+            if (it != s_threadSwapchainData.end())
+            {
+                smd = &it->second;
+            }
+        }
+
+        // FIXME: Detect present resources and configure our DX12 runtime with the same hwnd.
+        if (smd)
+        {
+            if (smd->swapchain == nullptr)
+            {
+                CComPtr<IDXGIFactory> factory;
+                HRESULT result = CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)&factory);
+                assert(SUCCEEDED(result));
+
+                result = smd->origCreateSwapchain(factory.p, pDevice->GetAdapter()->m_pUnderlyingDevice, smd->currentDesc, &smd->swapchain);
+                assert(SUCCEEDED(result));
+            }
+#if 0
+            // Create swapchain using our underlying device and then export to resource creation function
+            createArgs.m_PrivateCreateFn = [&](D3D12TranslationLayer::ResourceCreationArgs const&, ID3D12SwapChainAssistant*, ID3D12Resource** outResource) {
+                smd->swapchain->GetBuffer(0, IID_PPV_ARGS(outResource));
+            };
+#endif
+        }
+
         // After app resource desc is snapped
         if (pCreateResource->ResourceDimension == D3D10DDIRESOURCE_BUFFER)
         {
@@ -324,6 +357,104 @@ namespace D3D11On12
         {
             pResource->m_VidPnSourceId = pCreateResource->pPrimaryDesc->VidPnSourceId;
         }
+
+        if (smd)
+        {
+            pResource->m_associatedUnderlyingSwapchain = smd->swapchain;
+
+            enum RosHwLayout
+            {
+                Linear,
+                Tiled
+            };
+
+            struct RosKmdResource
+            {
+                int m_dummy;
+            };
+
+            struct RosAllocationGroupExchange
+            {
+                int     m_dummy;
+            };
+
+            struct RosAllocationExchange
+            {
+                // Input from UMD CreateResource DDI
+                D3D10DDIRESOURCE_TYPE   m_resourceDimension;
+
+                D3D10DDI_MIPINFO        m_mip0Info;
+                UINT                    m_usage;        // D3D10_DDI_RESOURCE_USAGE
+                UINT                    m_bindFlags;    // D3D10_DDI_RESOURCE_BIND_FLAG
+                UINT                    m_mapFlags;     // D3D10_DDI_MAP
+                UINT                    m_miscFlags;    // D3D10_DDI_RESOURCE_MISC_FLAG
+                DXGI_FORMAT             m_format;
+                DXGI_SAMPLE_DESC        m_sampleDesc;
+                UINT                    m_mipLevels;
+                UINT                    m_arraySize;
+
+                bool                    m_isPrimary;
+                DXGI_DDI_PRIMARY_DESC   m_primaryDesc;
+
+                RosHwLayout             m_hwLayout;
+                UINT                    m_hwWidthPixels;
+                UINT                    m_hwHeightPixels;
+                UINT                    m_hwSizeBytes;
+            };
+
+            struct RosKmdAllocation : public RosAllocationExchange
+            {
+            };
+
+            struct RosKmdDeviceAllocation
+            {
+                D3DKMT_HANDLE       m_hKMAllocation;
+                RosKmdAllocation* m_pRosKmdAllocation;
+            };
+
+            RosAllocationExchange rae = {};
+            rae.m_resourceDimension = pCreateResource->ResourceDimension;
+            rae.m_mip0Info = pCreateResource->pMipInfoList[0];
+            rae.m_usage = pCreateResource->Usage;
+            rae.m_bindFlags = pCreateResource->BindFlags;
+            rae.m_mapFlags = pCreateResource->MapFlags;
+            rae.m_miscFlags = pCreateResource->MiscFlags;
+            rae.m_format = pCreateResource->Format;
+            rae.m_sampleDesc = pCreateResource->SampleDesc;
+            rae.m_mipLevels = pCreateResource->MipLevels;
+            rae.m_arraySize = pCreateResource->ArraySize;
+
+            rae.m_isPrimary = false;
+            rae.m_primaryDesc = {};
+            rae.m_hwLayout = RosHwLayout::Linear;
+            rae.m_hwSizeBytes = rae.m_mip0Info.TexelWidth * rae.m_mip0Info.TexelHeight * 4;
+
+            auto allocate = D3DDDICB_ALLOCATE{};
+            auto allocationInfo = D3DDDI_ALLOCATIONINFO{};
+            {
+                // allocationInfo.hAllocation - out: Private driver data for allocation
+                allocationInfo.pSystemMem = nullptr;
+                allocationInfo.pPrivateDriverData = &rae;
+                allocationInfo.PrivateDriverDataSize = sizeof(rae);
+                allocationInfo.VidPnSourceId = 0;
+                allocationInfo.Flags.Primary = pCreateResource->pPrimaryDesc != nullptr;
+            }
+
+            auto rosAllocationGroupExchange = RosAllocationGroupExchange{};
+
+            allocate.pPrivateDriverData = &rosAllocationGroupExchange;
+            allocate.PrivateDriverDataSize = sizeof(rosAllocationGroupExchange);
+            allocate.hResource = hRTResource.handle;
+            // allocate.hKMResource - out: kernel resource handle
+            allocate.NumAllocations = 1;
+            allocate.pAllocationInfo = &allocationInfo;
+
+            // Create a kernel resource
+            HRESULT allocateHR = pDevice->m_pKTCallbacks->pfnAllocateCb(pDevice->m_hRTDevice.handle, &allocate);
+            assert(SUCCEEDED(allocateHR));
+            pResource->m_hAllocation = allocationInfo.hAllocation;
+        }
+
         D3D11on12_DDI_ENTRYPOINT_END_AND_REPORT_HR(hDevice, S_OK);
     }
 
