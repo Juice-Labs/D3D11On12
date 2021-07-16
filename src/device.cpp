@@ -499,6 +499,7 @@ namespace D3D11On12
                        pAdapter->m_Caps,
                        pAdapter->m_pUnderlyingDevice,
                        pAdapter->m_p3DCommandQueue,
+                       pAdapter->m_pUnderlyingAdapter,
                        m_translationCallbacks,
                        GetDebugFlags(),
                        GetImmCtxArgs(pAdapter, pArgs->Flags))

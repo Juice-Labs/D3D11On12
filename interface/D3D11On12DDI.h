@@ -47,7 +47,7 @@ struct SOpenAdapterArgs
 {
     ID3D12Device1* pDevice;
     ID3D12CommandQueue* p3DCommandQueue;
-    IUnknown* pAdapter;
+    IDXGIAdapter* pAdapter;
     UINT NodeIndex;
     PrivateCallbacks Callbacks;
     bool bDisableGPUTimeout;

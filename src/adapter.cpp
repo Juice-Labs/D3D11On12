@@ -2,6 +2,10 @@
 // Licensed under the MIT License.
 #include "pch.hpp"
 
+#define USE_JUICE 1
+
+typedef HRESULT(WINAPI* fn_CreateDXGIFactory)(REFIID riid, void** factory);
+
 #pragma comment( lib, "d3d11" )
 
 typedef struct ID3D11DeviceVtbl
@@ -446,6 +450,8 @@ std::mutex s_threadShaderDataMutex;
 std::unordered_map<DWORD, D3D11On12::SHADER_DESC> s_threadShaderData;
 std::unordered_map<DWORD, SwapchainMetaData> s_threadSwapchainData;
 static D3D11On12::SOpenAdapterArgs testArgs;
+HMODULE dxvkHandle = nullptr;
+CComPtr<IDXGIFactory> dxvkFactory;
 
 HRESULT STDMETHODCALLTYPE JuiceCreateSwapChain(
     IDXGIFactory* This,
@@ -479,7 +485,12 @@ HRESULT STDMETHODCALLTYPE JuiceCreateSwapChain(
     }
 
     CComPtr<IDXGISwapChain> tmpSwapchain;
-    HRESULT res = OrigCreateSwapChain(This, testArgs.p3DCommandQueue, &dx12desc, &tmpSwapchain);
+    HRESULT res = S_OK;
+#if USE_JUICE
+    res = dxvkFactory->CreateSwapChain(testArgs.p3DCommandQueue, &dx12desc, &tmpSwapchain);
+#else // Use warp adapter
+    res = OrigCreateSwapChain(This, testArgs.p3DCommandQueue, &dx12desc, &tmpSwapchain);
+#endif
     assert(SUCCEEDED(res));
 
     {
@@ -804,12 +815,39 @@ HRESULT fixupDXDevice(const CComPtr<IDXGIAdapter>& adapter)
 HRESULT WINAPI OpenAdapter10_2(_Inout_ D3D10DDIARG_OPENADAPTER* pArgs)
 {
     D3D11On12::SOpenAdapterArgs args{};
+    args.Callbacks.RegisterHandleCreation = RegisterHandleCreationForD3D12;
+    args.Callbacks.RegisterHandleDestruction = RegisterHandleDestructionForD3D12;
+    args.Callbacks.GetResourceFlags = GetResourceFlagsForD3D12;
+    args.Callbacks.NotifySharedResourceCreation = NotifySharedResourceCreationForD3D12;
 
     CComPtr<IDXGIFactory4> factory;
     ThrowFailure(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
+    fixupSwapchainCreation(factory);
 
     CComPtr<IDXGIAdapter> warpAdapter;
     ThrowFailure(factory->EnumWarpAdapter(IID_PPV_ARGS(&warpAdapter)));
+    fixupDXDevice(warpAdapter);
+
+#if defined(USE_JUICE)
+    dxvkHandle = LoadLibrary("juicedxgi.dll");
+    fn_CreateDXGIFactory dxvkCreateFactory = (fn_CreateDXGIFactory)GetProcAddress(dxvkHandle, "CreateDXGIFactory");
+    dxvkCreateFactory(IID_PPV_ARGS(&dxvkFactory));
+
+    // Get default dxvk adapter which should be Juice
+    CComPtr<IDXGIAdapter> adapter;
+    dxvkFactory->EnumAdapters(0, &adapter);
+
+    HMODULE vkd3dHandle = LoadLibrary("juiced3d12.dll");
+    PFN_D3D12_CREATE_DEVICE vkd3dCreateDevice = (PFN_D3D12_CREATE_DEVICE)GetProcAddress(vkd3dHandle, "D3D12CreateDevice");
+    vkd3dCreateDevice(adapter, D3D_FEATURE_LEVEL_11_1, IID_PPV_ARGS(&args.pDevice));
+
+    D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+
+    ThrowFailure(args.pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&args.p3DCommandQueue)));
+    args.pAdapter = adapter;
+#else // Use the warp adapter for testing
 
 #if 0
     CComPtr<ID3D12Debug> debugController;
@@ -832,14 +870,7 @@ HRESULT WINAPI OpenAdapter10_2(_Inout_ D3D10DDIARG_OPENADAPTER* pArgs)
     ThrowFailure(args.pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&args.p3DCommandQueue)));
     args.pAdapter = warpAdapter;
 
-    args.Callbacks.RegisterHandleCreation = RegisterHandleCreationForD3D12;
-    args.Callbacks.RegisterHandleDestruction = RegisterHandleDestructionForD3D12;
-    args.Callbacks.GetResourceFlags = GetResourceFlagsForD3D12;
-    args.Callbacks.NotifySharedResourceCreation = NotifySharedResourceCreationForD3D12;
-
-    fixupDXDevice(warpAdapter);
-
-    fixupSwapchainCreation(factory);
+#endif
 
     return OpenAdapter_D3D11On12(pArgs, &args);
 }
@@ -849,6 +880,7 @@ namespace D3D11On12
     //----------------------------------------------------------------------------------------------------------------------------------
     Adapter::Adapter(D3D10DDIARG_OPENADAPTER *pOpenAdapter, SOpenAdapterArgs& Args) noexcept(false)
         : m_pUnderlyingDevice(Args.pDevice)
+        , m_pUnderlyingAdapter(Args.pAdapter)
         , m_p3DCommandQueue(Args.p3DCommandQueue)
         , m_NodeIndex(Args.NodeIndex)
         , m_Callbacks(Args.Callbacks)
@@ -936,7 +968,8 @@ namespace D3D11On12
         auto pDevice = Device::CastFrom(pArgs->hDrvDevice);
         pDevice->m_hContext = createContext.hContext;
 
-        ThrowFailure(pAdapter->m_pUnderlyingDevice->QueryInterface(&pAdapter->m_pCompatDevice));
+        // vkd3d does not support the compatiblity device
+        pAdapter->m_pUnderlyingDevice->QueryInterface(&pAdapter->m_pCompatDevice);
 
         D3D11on12_DDI_ENTRYPOINT_END_AND_RETURN_HR(hr);
     }
