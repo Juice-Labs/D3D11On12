@@ -29,6 +29,7 @@ namespace D3D11On12
     public:
         CComPtr<ID3D12Device1> m_pUnderlyingDevice;
         CComPtr<IDXGIAdapter> m_pUnderlyingAdapter;
+        CComPtr<ID3D12Device1> m_pUnderlyingWarpDevice;
         ID3D12CommandQueue* m_p3DCommandQueue;
         CComPtr<ID3D12CompatibilityDevice> m_pCompatDevice;
         std::vector<CComPtr<IDXGISwapChain>> m_UnderlyingSwapchains;

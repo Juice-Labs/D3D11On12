@@ -48,6 +48,7 @@ struct SOpenAdapterArgs
     ID3D12Device1* pDevice;
     ID3D12CommandQueue* p3DCommandQueue;
     IDXGIAdapter* pAdapter;
+    ID3D12Device1* pWarpAdapter;
     UINT NodeIndex;
     PrivateCallbacks Callbacks;
     bool bDisableGPUTimeout;

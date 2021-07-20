@@ -11,11 +11,18 @@ namespace D3D11On12
     {
         D3D11on12_DDI_ENTRYPOINT_START();
         Device *pDevice = Device::CastFrom(hDevice);
-        D3D12TranslationLayer::ImmediateContext& context = pDevice->GetImmediateContextNoFlush();
 
         D3D12_FEATURE_DATA_FORMAT_SUPPORT SupportStruct = {};
         SupportStruct.Format = format;
+
+#if 1
+        HRESULT hr = pDevice->m_pAdapter->m_pUnderlyingWarpDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &SupportStruct, sizeof(SupportStruct));
+#else
+
+        D3D12TranslationLayer::ImmediateContext& context = pDevice->GetImmediateContextNoFlush();
+
         HRESULT hr = context.CheckFormatSupport(SupportStruct);
+#endif
         if (FAILED(hr))
         {
             assert(hr == E_FAIL);
@@ -52,6 +59,17 @@ namespace D3D11On12
     {
         D3D11on12_DDI_ENTRYPOINT_START();
         Device *pDevice = Device::CastFrom(hDevice);
+
+#if 1
+        D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS SupportStruct;
+        SupportStruct.Format = format;
+        SupportStruct.SampleCount = sampleCount;
+        SupportStruct.Flags = (D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS)flags;
+        HRESULT hr = pDevice->m_pAdapter->m_pUnderlyingWarpDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &SupportStruct, sizeof(SupportStruct));
+
+        *pData = SUCCEEDED(hr) ? SupportStruct.NumQualityLevels : 0;
+#else
+
         D3D12TranslationLayer::ImmediateContext& context = pDevice->GetImmediateContextNoFlush();
 
         assert((flags & ~D3DWDDM1_3DDI_CHECK_MULTISAMPLE_QUALITY_LEVELS_TILED_RESOURCE) == 0);
@@ -67,6 +85,7 @@ namespace D3D11On12
         {
             context.CheckMultisampleQualityLevels(format, sampleCount, flags12, pData);
         }
+#endif
 
         D3D11on12_DDI_ENTRYPOINT_END_AND_REPORT_HR(hDevice, S_OK);
     }

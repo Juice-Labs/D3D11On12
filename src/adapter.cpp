@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 #include "pch.hpp"
 
-#define USE_JUICE 1
+//#define USE_JUICE 1
 
 typedef HRESULT(WINAPI* fn_CreateDXGIFactory)(REFIID riid, void** factory);
 
@@ -829,6 +829,13 @@ HRESULT WINAPI OpenAdapter10_2(_Inout_ D3D10DDIARG_OPENADAPTER* pArgs)
     fixupDXDevice(warpAdapter);
 
 #if defined(USE_JUICE)
+
+    ThrowFailure(D3D12CreateDevice(
+        warpAdapter,
+        D3D_FEATURE_LEVEL_11_0,
+        IID_PPV_ARGS(&args.pWarpAdapter)
+    ));
+
     dxvkHandle = LoadLibrary("juicedxgi.dll");
     fn_CreateDXGIFactory dxvkCreateFactory = (fn_CreateDXGIFactory)GetProcAddress(dxvkHandle, "CreateDXGIFactory");
     dxvkCreateFactory(IID_PPV_ARGS(&dxvkFactory));
@@ -869,6 +876,7 @@ HRESULT WINAPI OpenAdapter10_2(_Inout_ D3D10DDIARG_OPENADAPTER* pArgs)
 
     ThrowFailure(args.pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&args.p3DCommandQueue)));
     args.pAdapter = warpAdapter;
+    args.pWarpAdapter = args.pDevice;
 
 #endif
 
@@ -881,6 +889,7 @@ namespace D3D11On12
     Adapter::Adapter(D3D10DDIARG_OPENADAPTER *pOpenAdapter, SOpenAdapterArgs& Args) noexcept(false)
         : m_pUnderlyingDevice(Args.pDevice)
         , m_pUnderlyingAdapter(Args.pAdapter)
+        , m_pUnderlyingWarpDevice(Args.pWarpAdapter)
         , m_p3DCommandQueue(Args.p3DCommandQueue)
         , m_NodeIndex(Args.NodeIndex)
         , m_Callbacks(Args.Callbacks)
