@@ -2,8 +2,611 @@
 // Licensed under the MIT License.
 #include "pch.hpp"
 
+//#define USE_JUICE 1
+
+typedef HRESULT(WINAPI* fn_CreateDXGIFactory)(REFIID riid, void** factory);
+
+#pragma comment( lib, "d3d11" )
+
+typedef struct ID3D11DeviceVtbl
+{
+    BEGIN_INTERFACE
+
+        HRESULT(STDMETHODCALLTYPE* QueryInterface)(
+            ID3D11Device* This,
+            /* [in] */ REFIID riid,
+            /* [annotation][iid_is][out] */
+            _COM_Outptr_  void** ppvObject);
+
+    ULONG(STDMETHODCALLTYPE* AddRef)(
+        ID3D11Device* This);
+
+    ULONG(STDMETHODCALLTYPE* Release)(
+        ID3D11Device* This);
+
+    HRESULT(STDMETHODCALLTYPE* CreateBuffer)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_BUFFER_DESC* pDesc,
+        /* [annotation] */
+        _In_opt_  const D3D11_SUBRESOURCE_DATA* pInitialData,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11Buffer** ppBuffer);
+
+    HRESULT(STDMETHODCALLTYPE* CreateTexture1D)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_TEXTURE1D_DESC* pDesc,
+        /* [annotation] */
+        _In_reads_opt_(_Inexpressible_(pDesc->MipLevels* pDesc->ArraySize))  const D3D11_SUBRESOURCE_DATA* pInitialData,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11Texture1D** ppTexture1D);
+
+    HRESULT(STDMETHODCALLTYPE* CreateTexture2D)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_TEXTURE2D_DESC* pDesc,
+        /* [annotation] */
+        _In_reads_opt_(_Inexpressible_(pDesc->MipLevels* pDesc->ArraySize))  const D3D11_SUBRESOURCE_DATA* pInitialData,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11Texture2D** ppTexture2D);
+
+    HRESULT(STDMETHODCALLTYPE* CreateTexture3D)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_TEXTURE3D_DESC* pDesc,
+        /* [annotation] */
+        _In_reads_opt_(_Inexpressible_(pDesc->MipLevels))  const D3D11_SUBRESOURCE_DATA* pInitialData,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11Texture3D** ppTexture3D);
+
+    HRESULT(STDMETHODCALLTYPE* CreateShaderResourceView)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  ID3D11Resource* pResource,
+        /* [annotation] */
+        _In_opt_  const D3D11_SHADER_RESOURCE_VIEW_DESC* pDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11ShaderResourceView** ppSRView);
+
+    HRESULT(STDMETHODCALLTYPE* CreateUnorderedAccessView)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  ID3D11Resource* pResource,
+        /* [annotation] */
+        _In_opt_  const D3D11_UNORDERED_ACCESS_VIEW_DESC* pDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11UnorderedAccessView** ppUAView);
+
+    HRESULT(STDMETHODCALLTYPE* CreateRenderTargetView)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  ID3D11Resource* pResource,
+        /* [annotation] */
+        _In_opt_  const D3D11_RENDER_TARGET_VIEW_DESC* pDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11RenderTargetView** ppRTView);
+
+    HRESULT(STDMETHODCALLTYPE* CreateDepthStencilView)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  ID3D11Resource* pResource,
+        /* [annotation] */
+        _In_opt_  const D3D11_DEPTH_STENCIL_VIEW_DESC* pDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11DepthStencilView** ppDepthStencilView);
+
+    HRESULT(STDMETHODCALLTYPE* CreateInputLayout)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_reads_(NumElements)  const D3D11_INPUT_ELEMENT_DESC* pInputElementDescs,
+        /* [annotation] */
+        _In_range_(0, D3D11_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT)  UINT NumElements,
+        /* [annotation] */
+        _In_reads_(BytecodeLength)  const void* pShaderBytecodeWithInputSignature,
+        /* [annotation] */
+        _In_  SIZE_T BytecodeLength,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11InputLayout** ppInputLayout);
+
+    HRESULT(STDMETHODCALLTYPE* CreateVertexShader)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_reads_(BytecodeLength)  const void* pShaderBytecode,
+        /* [annotation] */
+        _In_  SIZE_T BytecodeLength,
+        /* [annotation] */
+        _In_opt_  ID3D11ClassLinkage* pClassLinkage,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11VertexShader** ppVertexShader);
+
+    HRESULT(STDMETHODCALLTYPE* CreateGeometryShader)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_reads_(BytecodeLength)  const void* pShaderBytecode,
+        /* [annotation] */
+        _In_  SIZE_T BytecodeLength,
+        /* [annotation] */
+        _In_opt_  ID3D11ClassLinkage* pClassLinkage,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11GeometryShader** ppGeometryShader);
+
+    HRESULT(STDMETHODCALLTYPE* CreateGeometryShaderWithStreamOutput)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_reads_(BytecodeLength)  const void* pShaderBytecode,
+        /* [annotation] */
+        _In_  SIZE_T BytecodeLength,
+        /* [annotation] */
+        _In_reads_opt_(NumEntries)  const D3D11_SO_DECLARATION_ENTRY* pSODeclaration,
+        /* [annotation] */
+        _In_range_(0, D3D11_SO_STREAM_COUNT* D3D11_SO_OUTPUT_COMPONENT_COUNT)  UINT NumEntries,
+        /* [annotation] */
+        _In_reads_opt_(NumStrides)  const UINT* pBufferStrides,
+        /* [annotation] */
+        _In_range_(0, D3D11_SO_BUFFER_SLOT_COUNT)  UINT NumStrides,
+        /* [annotation] */
+        _In_  UINT RasterizedStream,
+        /* [annotation] */
+        _In_opt_  ID3D11ClassLinkage* pClassLinkage,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11GeometryShader** ppGeometryShader);
+
+    HRESULT(STDMETHODCALLTYPE* CreatePixelShader)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_reads_(BytecodeLength)  const void* pShaderBytecode,
+        /* [annotation] */
+        _In_  SIZE_T BytecodeLength,
+        /* [annotation] */
+        _In_opt_  ID3D11ClassLinkage* pClassLinkage,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11PixelShader** ppPixelShader);
+
+    HRESULT(STDMETHODCALLTYPE* CreateHullShader)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_reads_(BytecodeLength)  const void* pShaderBytecode,
+        /* [annotation] */
+        _In_  SIZE_T BytecodeLength,
+        /* [annotation] */
+        _In_opt_  ID3D11ClassLinkage* pClassLinkage,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11HullShader** ppHullShader);
+
+    HRESULT(STDMETHODCALLTYPE* CreateDomainShader)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_reads_(BytecodeLength)  const void* pShaderBytecode,
+        /* [annotation] */
+        _In_  SIZE_T BytecodeLength,
+        /* [annotation] */
+        _In_opt_  ID3D11ClassLinkage* pClassLinkage,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11DomainShader** ppDomainShader);
+
+    HRESULT(STDMETHODCALLTYPE* CreateComputeShader)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_reads_(BytecodeLength)  const void* pShaderBytecode,
+        /* [annotation] */
+        _In_  SIZE_T BytecodeLength,
+        /* [annotation] */
+        _In_opt_  ID3D11ClassLinkage* pClassLinkage,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11ComputeShader** ppComputeShader);
+
+    HRESULT(STDMETHODCALLTYPE* CreateClassLinkage)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _COM_Outptr_  ID3D11ClassLinkage** ppLinkage);
+
+    HRESULT(STDMETHODCALLTYPE* CreateBlendState)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_BLEND_DESC* pBlendStateDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11BlendState** ppBlendState);
+
+    HRESULT(STDMETHODCALLTYPE* CreateDepthStencilState)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_DEPTH_STENCIL_DESC* pDepthStencilDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11DepthStencilState** ppDepthStencilState);
+
+    HRESULT(STDMETHODCALLTYPE* CreateRasterizerState)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_RASTERIZER_DESC* pRasterizerDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11RasterizerState** ppRasterizerState);
+
+    HRESULT(STDMETHODCALLTYPE* CreateSamplerState)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_SAMPLER_DESC* pSamplerDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11SamplerState** ppSamplerState);
+
+    HRESULT(STDMETHODCALLTYPE* CreateQuery)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_QUERY_DESC* pQueryDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11Query** ppQuery);
+
+    HRESULT(STDMETHODCALLTYPE* CreatePredicate)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_QUERY_DESC* pPredicateDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11Predicate** ppPredicate);
+
+    HRESULT(STDMETHODCALLTYPE* CreateCounter)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_COUNTER_DESC* pCounterDesc,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11Counter** ppCounter);
+
+    HRESULT(STDMETHODCALLTYPE* CreateDeferredContext)(
+        ID3D11Device* This,
+        UINT ContextFlags,
+        /* [annotation] */
+        _COM_Outptr_opt_  ID3D11DeviceContext** ppDeferredContext);
+
+    HRESULT(STDMETHODCALLTYPE* OpenSharedResource)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  HANDLE hResource,
+        /* [annotation] */
+        _In_  REFIID ReturnedInterface,
+        /* [annotation] */
+        _COM_Outptr_opt_  void** ppResource);
+
+    HRESULT(STDMETHODCALLTYPE* CheckFormatSupport)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  DXGI_FORMAT Format,
+        /* [annotation] */
+        _Out_  UINT* pFormatSupport);
+
+    HRESULT(STDMETHODCALLTYPE* CheckMultisampleQualityLevels)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  DXGI_FORMAT Format,
+        /* [annotation] */
+        _In_  UINT SampleCount,
+        /* [annotation] */
+        _Out_  UINT* pNumQualityLevels);
+
+    void (STDMETHODCALLTYPE* CheckCounterInfo)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _Out_  D3D11_COUNTER_INFO* pCounterInfo);
+
+    HRESULT(STDMETHODCALLTYPE* CheckCounter)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  const D3D11_COUNTER_DESC* pDesc,
+        /* [annotation] */
+        _Out_  D3D11_COUNTER_TYPE* pType,
+        /* [annotation] */
+        _Out_  UINT* pActiveCounters,
+        /* [annotation] */
+        _Out_writes_opt_(*pNameLength)  LPSTR szName,
+        /* [annotation] */
+        _Inout_opt_  UINT* pNameLength,
+        /* [annotation] */
+        _Out_writes_opt_(*pUnitsLength)  LPSTR szUnits,
+        /* [annotation] */
+        _Inout_opt_  UINT* pUnitsLength,
+        /* [annotation] */
+        _Out_writes_opt_(*pDescriptionLength)  LPSTR szDescription,
+        /* [annotation] */
+        _Inout_opt_  UINT* pDescriptionLength);
+
+    HRESULT(STDMETHODCALLTYPE* CheckFeatureSupport)(
+        ID3D11Device* This,
+        D3D11_FEATURE Feature,
+        /* [annotation] */
+        _Out_writes_bytes_(FeatureSupportDataSize)  void* pFeatureSupportData,
+        UINT FeatureSupportDataSize);
+
+    HRESULT(STDMETHODCALLTYPE* GetPrivateData)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  REFGUID guid,
+        /* [annotation] */
+        _Inout_  UINT* pDataSize,
+        /* [annotation] */
+        _Out_writes_bytes_opt_(*pDataSize)  void* pData);
+
+    HRESULT(STDMETHODCALLTYPE* SetPrivateData)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  REFGUID guid,
+        /* [annotation] */
+        _In_  UINT DataSize,
+        /* [annotation] */
+        _In_reads_bytes_opt_(DataSize)  const void* pData);
+
+    HRESULT(STDMETHODCALLTYPE* SetPrivateDataInterface)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _In_  REFGUID guid,
+        /* [annotation] */
+        _In_opt_  const IUnknown* pData);
+
+    D3D_FEATURE_LEVEL(STDMETHODCALLTYPE* GetFeatureLevel)(
+        ID3D11Device* This);
+
+    UINT(STDMETHODCALLTYPE* GetCreationFlags)(
+        ID3D11Device* This);
+
+    HRESULT(STDMETHODCALLTYPE* GetDeviceRemovedReason)(
+        ID3D11Device* This);
+
+    void (STDMETHODCALLTYPE* GetImmediateContext)(
+        ID3D11Device* This,
+        /* [annotation] */
+        _Outptr_  ID3D11DeviceContext** ppImmediateContext);
+
+    HRESULT(STDMETHODCALLTYPE* SetExceptionMode)(
+        ID3D11Device* This,
+        UINT RaiseFlags);
+
+    UINT(STDMETHODCALLTYPE* GetExceptionMode)(
+        ID3D11Device* This);
+
+    END_INTERFACE
+} ID3D11DeviceVtbl;
+
+typedef struct IDXGIFactoryVtbl
+{
+    BEGIN_INTERFACE
+
+        HRESULT(STDMETHODCALLTYPE* QueryInterface)(
+            IDXGIFactory* This,
+            /* [in] */ REFIID riid,
+            /* [annotation][iid_is][out] */
+            _COM_Outptr_  void** ppvObject);
+
+    ULONG(STDMETHODCALLTYPE* AddRef)(
+        IDXGIFactory* This);
+
+    ULONG(STDMETHODCALLTYPE* Release)(
+        IDXGIFactory* This);
+
+    HRESULT(STDMETHODCALLTYPE* SetPrivateData)(
+        IDXGIFactory* This,
+        /* [annotation][in] */
+        _In_  REFGUID Name,
+        /* [in] */ UINT DataSize,
+        /* [annotation][in] */
+        _In_reads_bytes_(DataSize)  const void* pData);
+
+    HRESULT(STDMETHODCALLTYPE* SetPrivateDataInterface)(
+        IDXGIFactory* This,
+        /* [annotation][in] */
+        _In_  REFGUID Name,
+        /* [annotation][in] */
+        _In_opt_  const IUnknown* pUnknown);
+
+    HRESULT(STDMETHODCALLTYPE* GetPrivateData)(
+        IDXGIFactory* This,
+        /* [annotation][in] */
+        _In_  REFGUID Name,
+        /* [annotation][out][in] */
+        _Inout_  UINT* pDataSize,
+        /* [annotation][out] */
+        _Out_writes_bytes_(*pDataSize)  void* pData);
+
+    HRESULT(STDMETHODCALLTYPE* GetParent)(
+        IDXGIFactory* This,
+        /* [annotation][in] */
+        _In_  REFIID riid,
+        /* [annotation][retval][out] */
+        _COM_Outptr_  void** ppParent);
+
+    HRESULT(STDMETHODCALLTYPE* EnumAdapters)(
+        IDXGIFactory* This,
+        /* [in] */ UINT Adapter,
+        /* [annotation][out] */
+        _COM_Outptr_  IDXGIAdapter** ppAdapter);
+
+    HRESULT(STDMETHODCALLTYPE* MakeWindowAssociation)(
+        IDXGIFactory* This,
+        HWND WindowHandle,
+        UINT Flags);
+
+    HRESULT(STDMETHODCALLTYPE* GetWindowAssociation)(
+        IDXGIFactory* This,
+        /* [annotation][out] */
+        _Out_  HWND* pWindowHandle);
+
+    HRESULT(STDMETHODCALLTYPE* CreateSwapChain)(
+        IDXGIFactory* This,
+        /* [annotation][in] */
+        _In_  IUnknown* pDevice,
+        /* [annotation][in] */
+        _In_  DXGI_SWAP_CHAIN_DESC* pDesc,
+        /* [annotation][out] */
+        _COM_Outptr_  IDXGISwapChain** ppSwapChain);
+
+    HRESULT(STDMETHODCALLTYPE* CreateSoftwareAdapter)(
+        IDXGIFactory* This,
+        /* [in] */ HMODULE Module,
+        /* [annotation][out] */
+        _COM_Outptr_  IDXGIAdapter** ppAdapter);
+
+    END_INTERFACE
+} IDXGIFactoryVtbl;
+
+CreateSwapChainFunction OrigCreateSwapChain;
+
+std::mutex s_threadShaderDataMutex;
+std::unordered_map<DWORD, D3D11On12::SHADER_DESC> s_threadShaderData;
+std::unordered_map<DWORD, SwapchainMetaData> s_threadSwapchainData;
+static D3D11On12::SOpenAdapterArgs testArgs;
+HMODULE dxvkHandle = nullptr;
+CComPtr<IDXGIFactory> dxvkFactory;
+
+HRESULT STDMETHODCALLTYPE JuiceCreateSwapChain(
+    IDXGIFactory* This,
+    /* [annotation][in] */
+    _In_  IUnknown* pDevice,
+    /* [annotation][in] */
+    _In_  DXGI_SWAP_CHAIN_DESC* pDesc,
+    /* [annotation][out] */
+    _COM_Outptr_  IDXGISwapChain** ppSwapChain)
+{
+    DXGI_SWAP_CHAIN_DESC dx11desc = *pDesc;
+    DXGI_SWAP_CHAIN_DESC dx12desc = *pDesc;
+
+    dx12desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+
+    switch (dx12desc.SwapEffect)
+    {
+        case DXGI_SWAP_EFFECT_DISCARD:
+            dx12desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+            if (dx12desc.BufferCount < 2)
+            {
+                dx12desc.BufferCount = 2;
+            }
+            break;
+        case DXGI_SWAP_EFFECT_SEQUENTIAL:
+            dx12desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+            break;
+        default:
+            // Others are fine.
+            break;
+    }
+
+    CComPtr<IDXGISwapChain> tmpSwapchain;
+    HRESULT res = S_OK;
+#if USE_JUICE
+    res = dxvkFactory->CreateSwapChain(testArgs.p3DCommandQueue, &dx12desc, &tmpSwapchain);
+#else // Use warp adapter
+    res = OrigCreateSwapChain(This, testArgs.p3DCommandQueue, &dx12desc, &tmpSwapchain);
+#endif
+    assert(SUCCEEDED(res));
+
+    {
+        std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+        auto it = s_threadSwapchainData.find(GetCurrentThreadId());
+        if (it == s_threadSwapchainData.end())
+        {
+            SwapchainMetaData sd;
+            sd.currentDesc = pDesc;
+            sd.origCreateSwapchain = OrigCreateSwapChain;
+            sd.swapchain = tmpSwapchain;
+            s_threadSwapchainData.emplace(GetCurrentThreadId(), sd);
+        }
+    }
+
+    wchar_t winName[MAX_PATH];
+    RealGetWindowClassW(pDesc->OutputWindow, winName, MAX_PATH);
+    const wchar_t* szTitle = L"Hidden Window";
+
+    dx11desc.OutputWindow = CreateWindowW(
+        winName,
+        szTitle,
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        100, 100,
+        NULL,
+        NULL,
+        GetModuleHandle(NULL),
+        NULL
+    );
+
+    res = OrigCreateSwapChain(This, pDevice, &dx11desc, ppSwapChain);
+
+    {
+        std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+        auto it = s_threadSwapchainData.find(GetCurrentThreadId());
+        s_threadSwapchainData.erase(it);
+    }
+
+    return res;
+}
+
+typedef HRESULT(STDMETHODCALLTYPE* ShaderCreateFn)(
+    ID3D11Device* This,
+    /* [annotation] */
+    _In_reads_(BytecodeLength)  const void* pShaderBytecode,
+    /* [annotation] */
+    _In_  SIZE_T BytecodeLength,
+    /* [annotation] */
+    _In_opt_  ID3D11ClassLinkage* pClassLinkage,
+    /* [annotation] */
+    _COM_Outptr_opt_  void** ppVertexShader);
+
+ShaderCreateFn OrigCreateVertexShader;
+ShaderCreateFn OrigCreatePixelShader;
+
+HRESULT  CreateVertexShaderPushData(
+    ID3D11Device* This,
+    _In_reads_(BytecodeLength)  const void* pShaderBytecode,
+    _In_  SIZE_T BytecodeLength,
+    _In_opt_  ID3D11ClassLinkage* pClassLinkage,
+    _COM_Outptr_opt_  void** ppVertexShader)
+{
+    D3D11On12::SHADER_DESC sd;
+    sd.pFunction = (const BYTE*)pShaderBytecode;
+    sd.pLinkage = pClassLinkage;
+    sd.SizeInBytes = (UINT)BytecodeLength;
+
+    {
+        std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+        auto it = s_threadShaderData.find(GetCurrentThreadId());
+        if (it == s_threadShaderData.end())
+        {
+            s_threadShaderData.emplace(GetCurrentThreadId(), sd);
+        }
+        else
+        {
+            it->second = sd;
+        }
+    }
+
+    return OrigCreateVertexShader(This, pShaderBytecode, BytecodeLength, pClassLinkage, ppVertexShader);
+};
+
+HRESULT  CreatePixelShaderPushData(
+    ID3D11Device* This,
+    _In_reads_(BytecodeLength)  const void* pShaderBytecode,
+    _In_  SIZE_T BytecodeLength,
+    _In_opt_  ID3D11ClassLinkage* pClassLinkage,
+    _COM_Outptr_opt_  void** ppVertexShader)
+{
+    D3D11On12::SHADER_DESC sd;
+    sd.pFunction = (const BYTE*)pShaderBytecode;
+    sd.pLinkage = pClassLinkage;
+    sd.SizeInBytes = (UINT)BytecodeLength;
+
+    {
+        std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+        auto it = s_threadShaderData.find(GetCurrentThreadId());
+        if (it == s_threadShaderData.end())
+        {
+            s_threadShaderData.emplace(GetCurrentThreadId(), sd);
+        }
+        else
+        {
+            it->second = sd;
+        }
+    }
+
+    return OrigCreatePixelShader(This, pShaderBytecode, BytecodeLength, pClassLinkage, ppVertexShader);
+};
+
+
 HRESULT WINAPI OpenAdapter_D3D11On12(_Inout_ D3D10DDIARG_OPENADAPTER* pArgs, _Inout_ D3D11On12::SOpenAdapterArgs* pArgs2)
 {
+    testArgs = *pArgs2;
     try
     {
         pArgs->hAdapter.pDrvPrivate = new D3D11On12::Adapter(pArgs, *pArgs2); // throw( _com_error, bad_alloc )
@@ -13,11 +616,280 @@ HRESULT WINAPI OpenAdapter_D3D11On12(_Inout_ D3D10DDIARG_OPENADAPTER* pArgs, _In
     catch (std::bad_alloc&) { return E_OUTOFMEMORY; }
 }
 
+static std::mutex s_ResourceCreationArgsMutex;
+static std::unordered_map<void*, D3D11DDIARG_CREATERESOURCE> s_ResourceCreationArgs{};
+
+static void RegisterHandleCreationForD3D12(_In_ D3D10DDI_HRESOURCE hResource, _In_ CONST D3D11DDIARG_CREATERESOURCE* createArgs)
+{
+    std::lock_guard<decltype(s_ResourceCreationArgsMutex)> lg(s_ResourceCreationArgsMutex);
+
+    s_ResourceCreationArgs.emplace(hResource.pDrvPrivate, *createArgs);
+}
+void RegisterHandleDestructionForD3D12(_In_ D3D10DDI_HRESOURCE hResource)
+{
+    std::lock_guard<decltype(s_ResourceCreationArgsMutex)> lg(s_ResourceCreationArgsMutex);
+
+    auto it = s_ResourceCreationArgs.find(hResource.pDrvPrivate);
+    assert(it != s_ResourceCreationArgs.end());
+
+    s_ResourceCreationArgs.erase(it);
+}
+
+static D3D11_RESOURCE_FLAGS GetResourceFlagsForD3D12(_In_ D3D10DDI_HRESOURCE hResource, _Out_ bool* pbAcquireableOnWrite)
+{
+    std::lock_guard<decltype(s_ResourceCreationArgsMutex)> lg(s_ResourceCreationArgsMutex);
+
+    auto it = s_ResourceCreationArgs.find(hResource.pDrvPrivate);
+    assert(it != s_ResourceCreationArgs.end());
+
+    CONST D3D11DDIARG_CREATERESOURCE* createArgs = &it->second;
+
+    D3D11_RESOURCE_FLAGS flags{};
+    *pbAcquireableOnWrite = true;
+
+    if (createArgs->Usage == D3D10_DDI_USAGE_DEFAULT)
+    {
+        // Will have no CPU access
+    }
+    else if (createArgs->Usage == D3D10_DDI_USAGE_IMMUTABLE)
+    {
+        // Will have no CPU access
+    }
+    else if (createArgs->Usage == D3D10_DDI_USAGE_DYNAMIC)
+    {
+        flags.CPUAccessFlags |= D3D11_CPU_ACCESS_WRITE;
+    }
+    else if (createArgs->Usage == D3D10_DDI_USAGE_STAGING)
+    {
+        if ((createArgs->MapFlags & (D3D10_DDI_MAP_WRITE | D3D10_DDI_MAP_WRITE_DISCARD | D3D10_DDI_MAP_WRITE_NOOVERWRITE)) != 0)
+        {
+            flags.CPUAccessFlags |= D3D11_CPU_ACCESS_WRITE;
+        }
+
+        if ((createArgs->MapFlags & D3D10_DDI_MAP_READ) != 0)
+        {
+            flags.CPUAccessFlags |= D3D11_CPU_ACCESS_READ;
+        }
+    }
+
+    if ((createArgs->MiscFlags & D3D10_DDI_RESOURCE_MISC_SHARED) != 0)
+    {
+        flags.MiscFlags |= D3D10_RESOURCE_MISC_SHARED;
+    }
+
+    if ((createArgs->MiscFlags & D3D10_DDI_RESOURCE_AUTO_GEN_MIP_MAP) != 0)
+    {
+        flags.MiscFlags |= D3D10_RESOURCE_MISC_GENERATE_MIPS;
+    }
+
+    if ((createArgs->BindFlags & D3D10_DDI_BIND_RENDER_TARGET) != 0)
+    {
+        flags.BindFlags |= D3D11_BIND_RENDER_TARGET;
+    }
+
+    if ((createArgs->BindFlags & D3D10_DDI_BIND_CONSTANT_BUFFER) != 0)
+    {
+        flags.BindFlags |= D3D11_BIND_CONSTANT_BUFFER;
+    }
+
+    if ((createArgs->BindFlags & D3D10_DDI_BIND_DEPTH_STENCIL) != 0)
+    {
+        flags.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
+    }
+
+    if ((createArgs->BindFlags & D3D10_DDI_BIND_INDEX_BUFFER) != 0)
+    {
+        flags.BindFlags |= D3D11_BIND_INDEX_BUFFER;
+    }
+
+    if ((createArgs->BindFlags & D3D10_DDI_BIND_SHADER_RESOURCE) != 0)
+    {
+        flags.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+    }
+
+    if ((createArgs->BindFlags & D3D10_DDI_BIND_VERTEX_BUFFER) != 0)
+    {
+        flags.BindFlags |= D3D11_BIND_VERTEX_BUFFER;
+    }
+
+    if ((createArgs->BindFlags & D3D11_DDI_BIND_UNORDERED_ACCESS) != 0)
+    {
+        flags.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+    }
+
+    if ((createArgs->BindFlags & D3D10_DDI_BIND_STREAM_OUTPUT) != 0)
+    {
+        flags.BindFlags |= D3D11_BIND_STREAM_OUTPUT;
+    }
+
+    if ((createArgs->BindFlags & D3D11_DDI_BIND_DECODER) != 0)
+    {
+        flags.BindFlags |= D3D11_BIND_DECODER;
+    }
+
+    if ((createArgs->BindFlags & D3D11_DDI_BIND_VIDEO_ENCODER) != 0)
+    {
+        flags.BindFlags |= D3D11_BIND_VIDEO_ENCODER;
+    }
+
+    return flags;
+}
+
+static bool NotifySharedResourceCreationForD3D12(_In_ HANDLE, _In_ IUnknown*)
+{
+    return true;
+}
+
+static BOOL IsProcessDWM()
+{
+    BOOL result = FALSE;
+    SID_IDENTIFIER_AUTHORITY identifierAuthority{};
+    *(unsigned int*)(identifierAuthority.Value + 0) = 0;
+    *(unsigned short*)(identifierAuthority.Value + 4) = 0x500;
+    PSID psid;
+    if (TRUE == AllocateAndInitializeSid(&identifierAuthority, 2, 0x5A, 0, 0, 0, 0, 0, 0, 0, &psid))
+    {
+        BOOL isMember = FALSE;
+        if (TRUE == CheckTokenMembership(nullptr, psid, &isMember))
+        {
+            result = isMember;
+        }
+        FreeSid(psid);
+    }
+    return result;
+}
+
+HRESULT fixupSwapchainCreation(const CComPtr<IDXGIFactory4>& factory)
+{
+    static bool patched = false;
+
+    if (patched)
+        return S_OK;
+
+    IDXGIFactoryVtbl* factoryTbl = (IDXGIFactoryVtbl*)*((intptr_t*)factory.p);
+
+    OrigCreateSwapChain = factoryTbl->CreateSwapChain;
+
+    DetourTransactionBegin();
+    DetourUpdateThread(GetCurrentThread());
+    DetourAttach((PVOID*)&OrigCreateSwapChain, (PVOID)JuiceCreateSwapChain);
+    DetourTransactionCommit();
+
+    patched = true;
+
+    return S_OK;
+}
+
+HRESULT fixupDXDevice(const CComPtr<IDXGIAdapter>& adapter)
+{
+    static bool patched = false;
+
+    if (patched)
+        return S_OK;
+
+    std::vector<D3D_FEATURE_LEVEL> levels = { D3D_FEATURE_LEVEL_11_0 };
+    D3D_FEATURE_LEVEL outLevel{};
+
+    ID3D11Device* device;
+    ID3D11DeviceContext* immediateContext;
+
+    ThrowFailure(D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, levels.data(), (UINT)levels.size(), D3D11_SDK_VERSION, &device, &outLevel, &immediateContext));
+
+    ID3D11DeviceVtbl* deviceTbl = (ID3D11DeviceVtbl*)*((intptr_t*)device);
+
+    OrigCreateVertexShader = (ShaderCreateFn)deviceTbl->CreateVertexShader;
+    OrigCreatePixelShader = (ShaderCreateFn)deviceTbl->CreatePixelShader;
+
+    DetourTransactionBegin();
+    DetourUpdateThread(GetCurrentThread());
+    DetourAttach((PVOID*)&OrigCreateVertexShader, (PVOID)CreateVertexShaderPushData);
+    DetourAttach((PVOID*)&OrigCreatePixelShader, (PVOID)CreatePixelShaderPushData);
+    DetourTransactionCommit();
+
+    patched = true;
+    // We will leak our device/immediate context here
+
+    return S_OK;
+}
+
+HRESULT WINAPI OpenAdapter10_2(_Inout_ D3D10DDIARG_OPENADAPTER* pArgs)
+{
+    D3D11On12::SOpenAdapterArgs args{};
+    args.Callbacks.RegisterHandleCreation = RegisterHandleCreationForD3D12;
+    args.Callbacks.RegisterHandleDestruction = RegisterHandleDestructionForD3D12;
+    args.Callbacks.GetResourceFlags = GetResourceFlagsForD3D12;
+    args.Callbacks.NotifySharedResourceCreation = NotifySharedResourceCreationForD3D12;
+
+    CComPtr<IDXGIFactory4> factory;
+    ThrowFailure(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
+    fixupSwapchainCreation(factory);
+
+    CComPtr<IDXGIAdapter> warpAdapter;
+    ThrowFailure(factory->EnumWarpAdapter(IID_PPV_ARGS(&warpAdapter)));
+    fixupDXDevice(warpAdapter);
+
+#if defined(USE_JUICE)
+
+    ThrowFailure(D3D12CreateDevice(
+        warpAdapter,
+        D3D_FEATURE_LEVEL_11_0,
+        IID_PPV_ARGS(&args.pWarpAdapter)
+    ));
+
+    dxvkHandle = LoadLibrary("juicedxgi.dll");
+    fn_CreateDXGIFactory dxvkCreateFactory = (fn_CreateDXGIFactory)GetProcAddress(dxvkHandle, "CreateDXGIFactory");
+    dxvkCreateFactory(IID_PPV_ARGS(&dxvkFactory));
+
+    // Get default dxvk adapter which should be Juice
+    CComPtr<IDXGIAdapter> adapter;
+    dxvkFactory->EnumAdapters(0, &adapter);
+
+    HMODULE vkd3dHandle = LoadLibrary("juiced3d12.dll");
+    PFN_D3D12_CREATE_DEVICE vkd3dCreateDevice = (PFN_D3D12_CREATE_DEVICE)GetProcAddress(vkd3dHandle, "D3D12CreateDevice");
+    vkd3dCreateDevice(adapter, D3D_FEATURE_LEVEL_11_1, IID_PPV_ARGS(&args.pDevice));
+
+    D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+
+    ThrowFailure(args.pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&args.p3DCommandQueue)));
+    args.pAdapter = adapter;
+#else // Use the warp adapter for testing
+
+#if 0
+    CComPtr<ID3D12Debug> debugController;
+    if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
+    {
+        debugController->EnableDebugLayer();
+    }
+#endif
+
+    ThrowFailure(D3D12CreateDevice(
+        warpAdapter,
+        D3D_FEATURE_LEVEL_11_0,
+        IID_PPV_ARGS(&args.pDevice)
+    ));
+
+    D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+
+    ThrowFailure(args.pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&args.p3DCommandQueue)));
+    args.pAdapter = warpAdapter;
+    args.pWarpAdapter = args.pDevice;
+
+#endif
+
+    return OpenAdapter_D3D11On12(pArgs, &args);
+}
+
 namespace D3D11On12
 {
     //----------------------------------------------------------------------------------------------------------------------------------
     Adapter::Adapter(D3D10DDIARG_OPENADAPTER *pOpenAdapter, SOpenAdapterArgs& Args) noexcept(false)
         : m_pUnderlyingDevice(Args.pDevice)
+        , m_pUnderlyingAdapter(Args.pAdapter)
+        , m_pUnderlyingWarpDevice(Args.pWarpAdapter)
         , m_p3DCommandQueue(Args.p3DCommandQueue)
         , m_NodeIndex(Args.NodeIndex)
         , m_Callbacks(Args.Callbacks)
@@ -39,12 +911,8 @@ namespace D3D11On12
     
         m_Architecture.NodeIndex = m_NodeIndex;
 
-        if (!m_pUnderlyingDevice)
-        {
-            assert(Args.pAdapter != nullptr);
-            ThrowFailure(D3D12CreateDevice(Args.pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pUnderlyingDevice)));
-        }
-    
+        assert(m_pUnderlyingDevice);
+   
         HRESULT hr = m_pUnderlyingDevice->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE1, &m_Architecture, sizeof(m_Architecture));
         assert(SUCCEEDED(hr));
     
@@ -92,7 +960,25 @@ namespace D3D11On12
         auto pAdapter = CastFrom(hAdapter);
         new (pArgs->hDrvDevice.pDrvPrivate) Device(pAdapter, pArgs); // throw( _com_error, bad_alloc )
 
-        ThrowFailure(pAdapter->m_pUnderlyingDevice->QueryInterface(&pAdapter->m_pCompatDevice));
+        uint64_t dummyValue = 0;
+
+        D3DDDICB_CREATECONTEXT createContext;
+        ZeroMemory(&createContext, sizeof(createContext));
+
+        createContext.NodeOrdinal = 0;
+        createContext.EngineAffinity = 0;
+        createContext.Flags.Value = 0;
+        createContext.pPrivateDriverData = &dummyValue;
+        createContext.PrivateDriverDataSize = sizeof(dummyValue);
+
+        HRESULT otherHr = pArgs->pKTCallbacks->pfnCreateContextCb(pArgs->hRTDevice.handle, &createContext);
+        printf("%d\n", otherHr);
+
+        auto pDevice = Device::CastFrom(pArgs->hDrvDevice);
+        pDevice->m_hContext = createContext.hContext;
+
+        // vkd3d does not support the compatiblity device
+        pAdapter->m_pUnderlyingDevice->QueryInterface(&pAdapter->m_pCompatDevice);
 
         D3D11on12_DDI_ENTRYPOINT_END_AND_RETURN_HR(hr);
     }
@@ -372,8 +1258,7 @@ namespace D3D11On12
             }
     
             default:
-                assert(false);
-                return E_INVALIDARG;
+                return E_FAIL;
         }
         return hr;
     }

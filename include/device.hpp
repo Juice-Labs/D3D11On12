@@ -415,6 +415,12 @@ namespace D3D11On12
         static void APIENTRY QueryScanoutCaps(D3D10DDI_HDEVICE, D3D10DDI_HRESOURCE, UINT Subresource, D3DDDI_VIDEO_PRESENT_SOURCE_ID VidPnSourceId, UINT PlaneIdx, _Out_ D3DWDDM2_6DDI_SCANOUT_FLAGS* pFlags) noexcept;
         static void APIENTRY PrepareScanoutTransformation(D3D10DDI_HDEVICE, D3D10DDI_HRESOURCE, UINT Subresource, D3DDDI_VIDEO_PRESENT_SOURCE_ID VidPnSourceId, UINT PlaneIdx, _In_opt_ RECT* pRect) noexcept;
 
+        static void APIENTRY CreateVertexShaderDDI(D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept;
+        static void APIENTRY CreatePixelShaderDDI(D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept;
+        static void APIENTRY CreateGeometryShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept;
+        static void APIENTRY CreateHullShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER, _In_ CONST D3D11_1DDIARG_TESSELLATION_IO_SIGNATURES*) noexcept;
+        static void APIENTRY CreateDomainShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER, _In_ CONST D3D11_1DDIARG_TESSELLATION_IO_SIGNATURES*) noexcept;
+        static void APIENTRY CreateComputeShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT* pShaderCode, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER) noexcept;
 
         void ReportError(HRESULT hr) noexcept;
         /* End DDI Entry points*/
@@ -429,6 +435,10 @@ namespace D3D11On12
         {
             return m_SharedResourceHelpers;
         }
+
+        HANDLE m_hContext;
+        const D3DDDI_DEVICECALLBACKS* const m_pKTCallbacks;
+        const D3D10DDI_HRTDEVICE m_hRTDevice;
 
     protected:
         void PostSubmit();
@@ -446,8 +456,6 @@ namespace D3D11On12
 
         DXGITableLatest *const m_pDXGITable;
         const DXGI_DDI_BASE_CALLBACKS *const m_pDXGICallbacks;
-        const D3DDDI_DEVICECALLBACKS *const m_pKTCallbacks;
-        const D3D10DDI_HRTDEVICE m_hRTDevice;
 
         const D3D12TranslationLayer::TranslationLayerCallbacks m_translationCallbacks;
         D3D12TranslationLayer::ImmediateContext m_ImmediateContext;

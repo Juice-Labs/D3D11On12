@@ -26,6 +26,24 @@
 
 #include "D3D11On12DDI.h"
 
+#include "detours.h"
+
+typedef HRESULT(STDMETHODCALLTYPE* CreateSwapChainFunction)(
+    IDXGIFactory* This,
+    /* [annotation][in] */
+    _In_  IUnknown* pDevice,
+    /* [annotation][in] */
+    _In_  DXGI_SWAP_CHAIN_DESC* pDesc,
+    /* [annotation][out] */
+    _COM_Outptr_  IDXGISwapChain** ppSwapChain);
+
+struct SwapchainMetaData
+{
+    DXGI_SWAP_CHAIN_DESC* currentDesc;
+    CComPtr<IDXGISwapChain> swapchain;
+    CreateSwapChainFunction origCreateSwapchain;
+};
+
 _At_(return, _When_(FAILED(hr), __analysis_noreturn))
 inline void ThrowFailure(HRESULT hr)
 {

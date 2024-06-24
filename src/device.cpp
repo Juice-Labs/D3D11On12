@@ -2,17 +2,27 @@
 // Licensed under the MIT License.
 #include "pch.hpp"
 
+extern std::mutex s_threadShaderDataMutex;
+extern std::unordered_map<DWORD, D3D11On12::SHADER_DESC> s_threadShaderData;
+
 namespace D3D11On12
 {
     void APIENTRY Device::CheckFormatSupport(D3D10DDI_HDEVICE hDevice, DXGI_FORMAT format, _Out_ UINT* pData)
     {
         D3D11on12_DDI_ENTRYPOINT_START();
         Device *pDevice = Device::CastFrom(hDevice);
-        D3D12TranslationLayer::ImmediateContext& context = pDevice->GetImmediateContextNoFlush();
 
         D3D12_FEATURE_DATA_FORMAT_SUPPORT SupportStruct = {};
         SupportStruct.Format = format;
+
+#if 1
+        HRESULT hr = pDevice->m_pAdapter->m_pUnderlyingWarpDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &SupportStruct, sizeof(SupportStruct));
+#else
+
+        D3D12TranslationLayer::ImmediateContext& context = pDevice->GetImmediateContextNoFlush();
+
         HRESULT hr = context.CheckFormatSupport(SupportStruct);
+#endif
         if (FAILED(hr))
         {
             assert(hr == E_FAIL);
@@ -49,6 +59,17 @@ namespace D3D11On12
     {
         D3D11on12_DDI_ENTRYPOINT_START();
         Device *pDevice = Device::CastFrom(hDevice);
+
+#if 1
+        D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS SupportStruct;
+        SupportStruct.Format = format;
+        SupportStruct.SampleCount = sampleCount;
+        SupportStruct.Flags = (D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS)flags;
+        HRESULT hr = pDevice->m_pAdapter->m_pUnderlyingWarpDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &SupportStruct, sizeof(SupportStruct));
+
+        *pData = SUCCEEDED(hr) ? SupportStruct.NumQualityLevels : 0;
+#else
+
         D3D12TranslationLayer::ImmediateContext& context = pDevice->GetImmediateContextNoFlush();
 
         assert((flags & ~D3DWDDM1_3DDI_CHECK_MULTISAMPLE_QUALITY_LEVELS_TILED_RESOURCE) == 0);
@@ -64,6 +85,7 @@ namespace D3D11On12
         {
             context.CheckMultisampleQualityLevels(format, sampleCount, flags12, pData);
         }
+#endif
 
         D3D11on12_DDI_ENTRYPOINT_END_AND_REPORT_HR(hDevice, S_OK);
     }
@@ -265,7 +287,7 @@ namespace D3D11On12
         args.RenamingIsMultithreaded = BatchedContextUseWorkerThread(CreateDeviceFlags);
         args.UseThreadpoolForPSOCreates = true;
         args.UseRoundTripPSOs = GetCompatValue("RoundTripPSOs", &roundTripPSOs) && roundTripPSOs;
-        args.UseResidencyManagement = true;
+        args.UseResidencyManagement = false;
         args.DisableGPUTimeout = pAdapter->m_bAPIDisablesGPUTimeout;
         args.IsXbox = IsXboxCreateFlags(CreateDeviceFlags);
 #ifdef __D3D11On12CreatorID_INTERFACE_DEFINED__
@@ -496,6 +518,7 @@ namespace D3D11On12
                        pAdapter->m_Caps,
                        pAdapter->m_pUnderlyingDevice,
                        pAdapter->m_p3DCommandQueue,
+                       pAdapter->m_pUnderlyingAdapter,
                        m_translationCallbacks,
                        GetDebugFlags(),
                        GetImmCtxArgs(pAdapter, pArgs->Flags))
@@ -595,7 +618,14 @@ namespace D3D11On12
         m_pDDITable->pfnQueryScanoutCaps = QueryScanoutCaps;
         m_pDDITable->pfnPrepareScanoutTransformation = PrepareScanoutTransformation;
 
-        assert(pArgs->Interface == D3DWDDM2_7_DDI_INTERFACE_VERSION);
+        m_pDDITable->pfnCreateVertexShader = CreateVertexShaderDDI;
+        m_pDDITable->pfnCreateComputeShader = CreateComputeShaderDDI;
+        m_pDDITable->pfnCreatePixelShader = CreatePixelShaderDDI;
+        m_pDDITable->pfnCreateGeometryShader = CreateGeometryShaderDDI;
+        m_pDDITable->pfnCreateDomainShader = CreateDomainShaderDDI;
+        m_pDDITable->pfnCreateHullShader = CreateHullShaderDDI;
+
+        assert(pArgs->Interface == D3DWDDM2_7_DDI_INTERFACE_VERSION || pArgs->Interface == D3DWDDM2_6_DDI_INTERFACE_VERSION);
 
         m_pDXGITable->pfnBlt = Blt;
         m_pDXGITable->pfnBlt1 = Blt1;
@@ -609,16 +639,44 @@ namespace D3D11On12
         m_pDXGITable->pfnPresentMultiplaneOverlay1 = PresentMultiplaneOverlay1;
 
         // Not implemented (Handled by DXGIOn12)
-        m_pDXGITable->pfnPresent = nullptr;
-        m_pDXGITable->pfnCheckPresentDurationSupport = nullptr;
-        m_pDXGITable->pfnGetGammaCaps = nullptr;
-        m_pDXGITable->pfnGetMultiplaneOverlayCaps = nullptr;
-        m_pDXGITable->pfnGetMultiplaneOverlayGroupCaps = nullptr;
-        m_pDXGITable->pfnOfferResources1 = nullptr;
-        m_pDXGITable->pfnReclaimResources = nullptr;
-        m_pDXGITable->pfnPresentMultiplaneOverlay = nullptr;
-        m_pDXGITable->pfnQueryResourceResidency = nullptr;
-        m_pDXGITable->pfnSetDisplayMode = nullptr;
+        m_pDXGITable->pfnPresent = [](DXGI_DDI_ARG_PRESENT*) -> HRESULT {
+            return E_FAIL;
+        };
+
+        m_pDXGITable->pfnCheckPresentDurationSupport = [](DXGI_DDI_ARG_CHECKPRESENTDURATIONSUPPORT*) -> HRESULT {
+            return E_FAIL;
+        };
+        m_pDXGITable->pfnGetGammaCaps = [](DXGI_DDI_ARG_GET_GAMMA_CONTROL_CAPS*) -> HRESULT {
+            return E_FAIL;
+        };
+
+        m_pDXGITable->pfnGetMultiplaneOverlayCaps = [](DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS*)->HRESULT {
+            return E_FAIL;
+        };
+
+        m_pDXGITable->pfnGetMultiplaneOverlayGroupCaps = [](DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS*)->HRESULT {
+            return E_FAIL;
+        };
+
+        m_pDXGITable->pfnOfferResources1 = [](DXGI_DDI_ARG_OFFERRESOURCES1*)->HRESULT {
+            return E_FAIL;
+        };
+
+        m_pDXGITable->pfnReclaimResources = [](DXGI_DDI_ARG_RECLAIMRESOURCES*)->HRESULT {
+            return E_FAIL;
+        };
+
+        m_pDXGITable->pfnPresentMultiplaneOverlay = [](DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY*)->HRESULT {
+            return E_FAIL;
+        };
+
+        m_pDXGITable->pfnQueryResourceResidency = [](DXGI_DDI_ARG_QUERYRESOURCERESIDENCY*)->HRESULT {
+            return E_FAIL;
+        };
+
+        m_pDXGITable->pfnSetDisplayMode = [](DXGI_DDI_ARG_SETDISPLAYMODE*)->HRESULT {
+            return E_FAIL;
+        };
 
         *pArgs->ppfnRetrieveSubObject = RetrieveSubObject;
     }
@@ -930,6 +988,68 @@ namespace D3D11On12
         pDeferredDevice->ClearTrackedState();
 
         D3D11on12_DDI_ENTRYPOINT_END_AND_REPORT_HR(hDevice, S_OK);
+    }
+
+    void APIENTRY Device::CreateVertexShaderDDI(D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept
+    {
+        hRtShader;
+
+        auto pDevice = CastFrom(hDevice);
+
+        //reinterpret_cast<DeviceChildDeferred<D3D10DDI_HSHADER>*>(hShader.pDrvPrivate)->m_ImmediateHandle = D3D10DDI_HSHADER{ hRtShader.handle };
+        
+        const SHADER_DESC* sd = nullptr;
+        {
+            std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+            auto it = s_threadShaderData.find(GetCurrentThreadId());
+
+            // The DX CreateShader call should have left shader data for us to use
+            // here, much further down the stack
+            assert(it != s_threadShaderData.end());
+            sd = &it->second;
+        }
+
+        pDevice->CreateVertexShader(hShader, sd);
+    }
+
+    void APIENTRY Device::CreatePixelShaderDDI(D3D10DDI_HDEVICE hDevice, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRtShader, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept
+    {
+        hRtShader;
+
+        auto pDevice = CastFrom(hDevice);
+
+        const SHADER_DESC* sd = nullptr;
+        {
+            std::lock_guard<decltype(s_threadShaderDataMutex)> lg(s_threadShaderDataMutex);
+            auto it = s_threadShaderData.find(GetCurrentThreadId());
+
+            // The DX CreateShader call should have left shader data for us to use
+            // here, much further down the stack
+            assert(it != s_threadShaderData.end());
+            sd = &it->second;
+        }
+
+        pDevice->CreatePixelShader(hShader, sd);
+    }
+
+    void APIENTRY Device::CreateGeometryShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER, _In_ CONST D3D11_1DDIARG_STAGE_IO_SIGNATURES*) noexcept
+    {
+
+    }
+
+    void APIENTRY Device::CreateHullShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER, _In_ CONST D3D11_1DDIARG_TESSELLATION_IO_SIGNATURES*) noexcept
+    {
+
+    }
+
+    void APIENTRY Device::CreateDomainShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER, _In_ CONST D3D11_1DDIARG_TESSELLATION_IO_SIGNATURES*) noexcept
+    {
+
+    }
+
+    void APIENTRY Device::CreateComputeShaderDDI(D3D10DDI_HDEVICE, _In_reads_(pShaderCode[1]) CONST UINT*, D3D10DDI_HSHADER, D3D10DDI_HRTSHADER) noexcept
+    {
+
     }
 
     //----------------------------------------------------------------------------------------------------------------------------------
@@ -1312,21 +1432,23 @@ namespace D3D11On12
     STDMETHODIMP_(void) DeviceBase::SetMarker(_In_opt_z_ const wchar_t* name) noexcept
     {
         D3D11on12_DDI_ENTRYPOINT_START();
-        GetBatchedContext().SetMarker(name);
+        name;
+        //GetBatchedContext().SetMarker(name);
         CLOSE_TRYCATCH_AND_STORE_HRESULT(S_OK);
         assert(SUCCEEDED(EntryPointHr));
     }
     STDMETHODIMP_(void) DeviceBase::BeginEvent(_In_opt_z_ const wchar_t* name) noexcept
     {
         D3D11on12_DDI_ENTRYPOINT_START();
-        GetBatchedContext().BeginEvent(name);
+        name;
+        //GetBatchedContext().BeginEvent(name);
         CLOSE_TRYCATCH_AND_STORE_HRESULT(S_OK);
         assert(SUCCEEDED(EntryPointHr));
     }
     STDMETHODIMP_(void) DeviceBase::EndEvent() noexcept
     {
         D3D11on12_DDI_ENTRYPOINT_START();
-        GetBatchedContext().EndEvent();
+        //GetBatchedContext().EndEvent();
         CLOSE_TRYCATCH_AND_STORE_HRESULT(S_OK);
         assert(SUCCEEDED(EntryPointHr));
     }

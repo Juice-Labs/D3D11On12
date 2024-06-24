@@ -91,5 +91,9 @@ namespace D3D11On12
 
     public:
         UINT m_VidPnSourceId = D3DDDI_ID_UNINITIALIZED;
+
+        CComPtr<IDXGISwapChain> m_associatedUnderlyingSwapchain;
+
+        D3DKMT_HANDLE m_hAllocation;
     };
 };

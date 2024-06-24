@@ -35,6 +35,8 @@ struct ResourceInfo
 
 struct PrivateCallbacks
 {
+    void (CALLBACK* RegisterHandleCreation)(_In_ D3D10DDI_HRESOURCE, _In_ CONST D3D11DDIARG_CREATERESOURCE*);
+    void (CALLBACK* RegisterHandleDestruction)(_In_ D3D10DDI_HRESOURCE);
     D3D11_RESOURCE_FLAGS (CALLBACK *GetResourceFlags)(_In_ D3D10DDI_HRESOURCE, _Out_ bool *pbAcquireableOnWrite);
     bool (CALLBACK *NotifySharedResourceCreation)(_In_ HANDLE, _In_ IUnknown*);
 };
@@ -45,7 +47,8 @@ struct SOpenAdapterArgs
 {
     ID3D12Device1* pDevice;
     ID3D12CommandQueue* p3DCommandQueue;
-    IUnknown* pAdapter;
+    IDXGIAdapter* pAdapter;
+    ID3D12Device1* pWarpAdapter;
     UINT NodeIndex;
     PrivateCallbacks Callbacks;
     bool bDisableGPUTimeout;
